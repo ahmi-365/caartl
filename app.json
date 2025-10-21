@@ -20,10 +20,21 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.mycompany.myapp",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyAfVpjHZOorgnONhgSzFNvNBzF2oALsmIU"
+        }
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "9fafc85f-1f8d-4f03-8520-9cde8fc20a48"
+      }
     }
   }
 }
