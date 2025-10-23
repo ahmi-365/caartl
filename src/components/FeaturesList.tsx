@@ -2,30 +2,53 @@ import React from 'react';
 import {
   View,
   Text,
-  Image,
   StyleSheet,
   TouchableOpacity,
 } from 'react-native';
 
-const FeaturesList: React.FC = () => {
-  const features = [
+// Lucide icons (no network images)
+import {
+  Settings,   // Transmission
+  Users,      // Door & Seats
+  Wind,       // Air Condition
+  Fuel,       // Fuel Type
+  ArrowRight,
+} from 'lucide-react-native';
+import { useNavigation } from '@react-navigation/native';
+
+type Feature = {
+  Icon: React.ComponentType<any>;
+  title: string;
+  subtitle: string;
+  highlighted?: boolean;
+};
+
+type Props = {
+  /** Called when the user taps the right arrow */
+  onSeeAllPress?: () => void;
+};
+
+const FeaturesList: React.FC<Props> = ({ onSeeAllPress }) => {
+    const navigation = useNavigation();
+  
+  const features: Feature[] = [
     {
-      icon: 'https://static.codia.ai/image/2025-10-21/dy1kmutzx0.png',
+      Icon: Settings,
       title: 'Transmission',
       subtitle: 'Auto',
     },
     {
-      icon: 'https://static.codia.ai/image/2025-10-21/pAPQNoReza.png',
+      Icon: Users,
       title: 'Door & Seats',
       subtitle: '4 Doors and 7 Seats',
     },
     {
-      icon: 'https://static.codia.ai/image/2025-10-21/9r2FDULRFr.png',
+      Icon: Wind,
       title: 'Air Condition',
       subtitle: 'Climate Control',
     },
     {
-      icon: 'https://static.codia.ai/image/2025-10-21/nnBDm0j7Hg.png',
+      Icon: Fuel,
       title: 'Fuel Type',
       subtitle: 'Diesel',
     },
@@ -33,87 +56,102 @@ const FeaturesList: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.featuresGrid}>
-        {features.map((feature, index) => (
-          <View key={index} style={styles.featureCard}>
-            <Image
-              source={{ uri: feature.icon }}
-              style={styles.featureIcon}
-              resizeMode="contain"
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>All Features</Text>
+
+        <TouchableOpacity
+          style={styles.arrowButton}
+          onPress={() => navigation.navigate('CarDetailPage')}
+          activeOpacity={0.7}
+        >xz
+          <ArrowRight size={24} color="#FFFFFF" strokeWidth={2.5} />
+        </TouchableOpacity>
+      </View>
+
+      {/* 2 × 2 Grid */}
+      <View style={styles.grid}>
+        {features.map((f, i) => (
+          <View
+            key={i}
+            style={[styles.card, f.highlighted && styles.cardHighlighted]}
+          >
+            <f.Icon
+              size={32}
+              color="#FFD700"
+              strokeWidth={2}
+              style={styles.icon}
             />
-            <Text style={styles.featureTitle}>{feature.title}</Text>
-            <Text style={styles.featureSubtitle}>{feature.subtitle}</Text>
+            <Text style={styles.title}>{f.title}</Text>
+            <Text style={styles.subtitle}>{f.subtitle}</Text>
           </View>
         ))}
       </View>
-      
-      <TouchableOpacity style={styles.arrowButton}>
-        <Image
-          source={{ uri: 'https://static.codia.ai/image/2025-10-21/6SeURzMpYu.png' }}
-          style={styles.arrowIcon}
-          resizeMode="contain"
-        />
-      </TouchableOpacity>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    paddingHorizontal: 43,
-    position: 'relative',
-  },
-  featuresGrid: {
+  container: { paddingHorizontal: 20 },
+
+  /* ---------- Header ---------- */
+  header: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     justifyContent: 'space-between',
-    gap: 20,
+    alignItems: 'center',
+    marginBottom: 16,
   },
-  featureCard: {
-    width: 174,
-    height: 90.03,
-    backgroundColor: 'rgba(0, 0, 0, 0.74)',
-    borderRadius: 20,
-    padding: 18,
-    shadowColor: '#000000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.06,
-    shadowRadius: 12.5,
-    elevation: 5,
-  },
-  featureIcon: {
-    width: 32,
-    height: 28,
-    marginBottom: 8,
-  },
-  featureTitle: {
-    fontSize: 16,
-    lineHeight: 28,
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '600',
     color: '#FFFFFF',
-    fontWeight: '400',
-    marginBottom: 4,
-  },
-  featureSubtitle: {
-    fontSize: 14,
-    color: '#979797',
-    fontWeight: '400',
   },
   arrowButton: {
-    position: 'absolute',
-    right: 20,
-    top: '50%',
-    width: 47,
-    height: 35,
+    width: 40,
+    height: 40,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  arrowIcon: {
-    width: 21,
-    height: 2,
-    tintColor: '#FFFFFF',
+
+  /* ---------- Grid ---------- */
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    rowGap: 16,
+  },
+
+  card: {
+    width: '48%',
+    backgroundColor: 'rgba(0,0,0,0.74)',
+    borderRadius: 20,
+    padding: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12.5,
+    elevation: 5,
+    alignItems: 'center',
+  },
+  cardHighlighted: {
+    borderWidth: 2,
+    borderColor: '#00FFFF',
+  },
+
+  icon: { marginBottom: 8 },
+  title: {
+    fontSize: 16,
+    lineHeight: 20,
+    color: '#FFFFFF',
+    fontWeight: '400',
+    textAlign: 'center',
+    marginBottom: 2,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: '#979797',
+    fontWeight: '400',
+    textAlign: 'center',
   },
 });
 

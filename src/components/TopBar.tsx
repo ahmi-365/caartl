@@ -1,92 +1,57 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
-import { useTheme } from '../context/ThemeContext';
-import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useRoute } from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { TouchableOpacity, View, Text, StyleSheet } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 
 interface TopBarProps {
-  title: string;
+  onMenuPress?: () => void;
+  onNotificationPress?: () => void;
 }
 
-const TopBar: React.FC<TopBarProps> = ({ title }) => {
-  const { theme, toggleTheme } = useTheme();
-  const navigation = useNavigation();
-  const route = useRoute();
-  const isDark = theme === 'dark';
-
-  const showLogout = !['Login', 'Register'].includes(route.name);
-
-  const handleLogout = async () => {
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Logout',
-        style: 'destructive',
-        onPress: async () => {
-          await AsyncStorage.removeItem('userToken');
-          await AsyncStorage.removeItem('userData');
-          navigation.reset({
-            index: 0,
-            routes: [{ name: 'Login' as never }],
-          });
-        },
-      },
-    ]);
-  };
-
+export const TopBar: React.FC<TopBarProps> = ({ onMenuPress, onNotificationPress }) => {
   return (
-    <View
-      style={[
-        styles.container,
-        { backgroundColor: isDark ? '#1c1c1e' : '#ffffff', shadowColor: isDark ? '#000' : '#aaa' },
-      ]}
-    >
-      <Text style={[styles.title, { color: isDark ? '#fff' : '#000' }]}>{title}</Text>
-      <View style={styles.actions}>
-        <TouchableOpacity onPress={toggleTheme} style={styles.iconButton}>
-          <Ionicons
-            name={isDark ? 'sunny-outline' : 'moon-outline'}
-            size={24}
-            color={isDark ? '#a855f7' : '#333'}
-          />
-        </TouchableOpacity>
+    <View style={styles.header}>
+      <TouchableOpacity onPress={onMenuPress} activeOpacity={0.7} style={styles.headerButton}>
+        <Svg width="26" height="24" viewBox="0 0 26 24" fill="none">
+          <Path d="M0 2C0 0.895431 0.895431 0 2 0H20C21.1046 0 22 0.895431 22 2C22 3.10457 21.1046 4 20 4H2C0.895431 4 0 3.10457 0 2Z" fill="white"/>
+          <Path d="M0 12C0 10.8954 0.895431 10 2 10H16C17.1046 10 18 10.8954 18 12C18 13.1046 17.1046 14 16 14H2C0.895431 14 0 13.1046 0 12Z" fill="white"/>
+          <Path d="M0 22C0 20.8954 0.895431 20 2 20H20C21.1046 20 22 20.8954 22 22C22 23.1046 21.1046 24 20 24H2C0.895431 24 0 23.1046 0 22Z" fill="white"/>
+        </Svg>
+      </TouchableOpacity>
 
-        {showLogout && (
-          <TouchableOpacity onPress={handleLogout} style={styles.iconButton}>
-            <Ionicons name="log-out-outline" size={24} color={isDark ? '#a855f7' : '#333'} />
-          </TouchableOpacity>
-        )}
-      </View>
+      <Text style={styles.logo}>caartI</Text>
+
+      <TouchableOpacity onPress={onNotificationPress} activeOpacity={0.7} style={styles.headerButton}>
+        <Svg width="24" height="28" viewBox="0 0 24 28" fill="none">
+          <Path d="M12 0C10.9 0 10 0.9 10 2C10 2.6 10.3 3.1 10.7 3.4C7.1 4.4 4.5 7.6 4.5 11.5V17L2 19.5V21H22V19.5L19.5 17V11.5C19.5 7.6 16.9 4.4 13.3 3.4C13.7 3.1 14 2.6 14 2C14 0.9 13.1 0 12 0ZM12 28C13.7 28 15 26.7 15 25H9C9 26.7 10.3 28 12 28Z" fill="white"/>
+        </Svg>
+      </TouchableOpacity>
     </View>
   );
 };
 
-export default TopBar;
-
 const styles = StyleSheet.create({
-  container: {
-    paddingTop: 50,
-    paddingBottom: 15,
-    paddingHorizontal: 20,
+  header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    elevation: 4,
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    shadowOffset: { width: 0, height: 2 },
-    zIndex: 10,
+    justifyContent: 'space-between',
+    paddingHorizontal: 25.5,
+    paddingTop: 60,
+    paddingBottom: 16,
+    position: 'absolute',   // ← This makes it fixed
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 1000,           // ← Ensures it's above other content
+    backgroundColor: 'rgba(0, 0, 0, 0.8)', // Optional: add background if needed
   },
-  title: {
-    fontSize: 20,
+  headerButton: {
+    padding: 8,
+  },
+  logo: {
+    fontFamily: 'Poppins',
     fontWeight: '600',
-  },
-  actions: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  iconButton: {
-    marginLeft: 12,
+    fontSize: 24,
+    color: '#cadb2a',
+    letterSpacing: -0.41,
   },
 });

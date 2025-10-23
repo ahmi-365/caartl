@@ -6,7 +6,7 @@ import {
   ScrollView,
   Dimensions,
 } from 'react-native';
-import LinearGradient from 'react-native-linear-gradient';
+// import LinearGradient from 'react-native-linear-gradient';
 import Header from '../components/Header';
 import CarImage from '../components/CarImage';
 import CountdownTimer from '../components/CountdownTimer';
@@ -14,26 +14,35 @@ import BidSection from '../components/BidSection';
 import FeaturesList from '../components/FeaturesList';
 import PriceSection from '../components/PriceSection';
 import ActionButtons from '../components/ActionButtons';
+import { LinearGradient } from 'expo-linear-gradient';
+import {TopBar}  from '../components/TopBar';
+import { BottomNav } from '../components/BottomNavigation';
 
 const { width, height } = Dimensions.get('window');
 
 const LiveCarAuctionScreen: React.FC = () => {
+  
   return (
     <View style={styles.container}>
+<TopBar
+/>
       <LinearGradient
         colors={['rgba(202, 219, 42, 0)', 'rgba(202, 219, 42, 0.46)']}
         style={styles.gradient}
+        
       >
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-          <Header />
-          <CarImage />
-          <CountdownTimer />
-          <BidSection />
-          <Text style={styles.allFeaturesTitle}>All Features</Text>
+     <CarImage />
+     <BidSection />
+<CountdownTimer 
+  timeLeft={{ days: 1, hours: 2, minutes: 30, seconds: 45 }} 
+/>          
+          {/* <Text style={styles.allFeaturesTitle}>All Features</Text> */}
           <FeaturesList />
           <PriceSection />
-          <ActionButtons />
+          {/* <ActionButtons /> */}
         </ScrollView>
+        <BottomNav/>
       </LinearGradient>
     </View>
   );
@@ -43,6 +52,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000000',
+    paddingTop: 120,
   },
   gradient: {
     flex: 1,

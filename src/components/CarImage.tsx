@@ -6,13 +6,21 @@ import {
   StyleSheet,
   Dimensions,
 } from 'react-native';
-import LinearGradient from 'react-native-linear-gradient';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const { width } = Dimensions.get('window');
 
 const CarImage: React.FC = () => {
   return (
     <View style={styles.container}>
+      {/* Highest Bid + Badge Row */}
+      <View style={styles.bidRow}>
+        <Text style={styles.carbid}>Highest Bid</Text>
+        <View style={styles.highestBidBadge}>
+          <Text style={styles.highestBidBadgeText}>$45,000</Text>
+        </View>
+      </View>
+
       <Text style={styles.carTitle}>Audi Model X56</Text>
       
       <View style={styles.imageContainer}>
@@ -57,12 +65,41 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginTop: 20,
   },
+  bidRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  carbid: {
+    fontFamily: 'Poppins',
+    fontWeight: '700',
+    fontSize: 12,
+    lineHeight: 21,
+    color: '#5b5656ff',
+    textTransform: 'uppercase',
+  },
+  highestBidBadge: {
+    backgroundColor: '#cadb2a',
+    borderRadius: 5,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    // minWidth: 80,
+    alignItems: 'center',
+  },
+  highestBidBadgeText: {
+    fontFamily: 'Poppins',
+    fontWeight: '700',
+    fontSize: 12,
+    color: '#000000',
+    textAlign: 'center',
+  },
   carTitle: {
     fontFamily: 'Poppins',
     fontWeight: '700',
     fontSize: 14,
     lineHeight: 21,
-    color: '#FFFFFF',
+    color:'#FFFFFF',
     textTransform: 'uppercase',
     marginBottom: 15,
   },
