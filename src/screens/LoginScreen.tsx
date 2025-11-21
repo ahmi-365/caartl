@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -8,20 +8,129 @@ import {
   StyleSheet,
   Dimensions,
   ImageBackground,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Input } from '../components/ui/input';
 import { useNavigation } from '@react-navigation/native';
 import type { RootStackParamList } from '../navigation/AppNavigator'; 
-import {  NativeStackNavigationProp } from '@react-navigation/native-stack';
-
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 const { width, height } = Dimensions.get('window');
+const BASE_URL = 'https://api.caartl.com/api';
+interface User {
+  id: number;
+  agent_id: string | null;
+  is_approved: number;
+  name: string;
+  email_verified_at: string | null;
+  created_at: string;
+  updated_at: string;
+  email: string;
+  target: string | null;
+  bio: string;
+  phone: string;
+  photo: string | null;
+  roles: string[];
+  permissions: string[];
+}
 
+interface LoginResponse {
+  status: string;
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+  user: User;
+}
 const LoginScreen = () => {
   type LoginScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Login'>;
+  const navigation = useNavigation<LoginScreenNavigationProp>();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const saveAuthData = async (token: string, user: User) => {
+    try {
+      await AsyncStorage.setItem('auth_token', token);
+      await AsyncStorage.setItem('user', JSON.stringify(user));
+      console.log('Auth data saved successfully');
+    } catch (error) {
+      console.error('Error saving auth data:', error);
+      throw error;
+    }
+  };
+  const clearAuthData = async () => {
+    try {
+      await AsyncStorage.multiRemove(['auth_token', 'user']);
+      console.log('Auth data cleared successfully');
+    } catch (error) {
+      console.error('Error clearing auth data:', error);
+    }
+  };
 
+  const handleLogin = async () => {
+    if (!email || !password) {
+      Alert.alert('Error', 'Please fill in all fields');
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      Alert.alert('Error', 'Please enter a valid email address');
+      return;
+    }
+    setLoading(true);
+    try {
+      const response = await axios.post<LoginResponse>(
+        `${BASE_URL}/login`,
+        {
+          email: email.trim().toLowerCase(),
+          password: password,
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          timeout: 10000, 
+        }
+      );
 
-  const navigation = useNavigation();
+      if (response.data.status === 'success') {
+        await saveAuthData(response.data.access_token, response.data.user);
+        Alert.alert('Success', 'Login successful!');
+        navigation.navigate('Home');
+      } else {
+        Alert.alert('Error', 'Login failed. Please try again.');
+      }
+    } catch (error: any) {
+      console.error('Login error:', error);
+      if (error.response) {
+        const errorMessage = error.response.data?.message || 
+                           error.response.data?.error || 
+                           'Login failed. Please try again.';
+        Alert.alert('Error', errorMessage);
+      } else if (error.request) {
+        Alert.alert('Error', 'Network error. Please check your connection.');
+      } else {
+        Alert.alert('Error', 'An unexpected error occurred.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  const checkExistingAuth = async () => {
+    try {
+      const [token, userString] = await AsyncStorage.multiGet(['auth_token', 'user']);
+      
+      if (token[1] && userString[1]) {
+        const user = JSON.parse(userString[1]);
+        console.log('User already logged in:', user.email);
+      }
+    } catch (error) {
+      console.error('Error checking existing auth:', error);
+    }
+  };
   return (
     <View style={styles.container}>
       {/* Background Images */}
@@ -66,87 +175,75 @@ const LoginScreen = () => {
             placeholderTextColor="rgba(0, 0, 0, 0.37)"
             keyboardType="email-address"
             autoCapitalize="none"
+            value={email}
+            onChangeText={setEmail}
+            editable={!loading}
           />
         </View>
         
         {/* Password Input */}
-        {/* Password Input */}
-<View style={styles.inputContainer}>
-  <Image
-    source={{ uri: 'https://static.codia.ai/image/2025-10-20/ehk1tymwRT.png' }}
-    style={styles.passwordIcon}
-    resizeMode="contain"
-  />
+        <View style={styles.inputContainer}>
+          <Image
+            source={{ uri: 'https://static.codia.ai/image/2025-10-20/ehk1tymwRT.png' }}
+            style={styles.passwordIcon}
+            resizeMode="contain"
+          />
 
-  <Input
-    placeholder="Password"
-    secureTextEntry
-    keyboardType="default"
-    autoCapitalize="none"
-  />
+          <Input
+            placeholder="Password"
+            secureTextEntry
+            keyboardType="default"
+            autoCapitalize="none"
+            value={password}
+            onChangeText={setPassword}
+            editable={!loading}
+          />
 
-  <Image
-    source={{ uri: 'https://static.codia.ai/image/2025-10-20/csxGWWJ4GP.png' }}
-    style={styles.eyeIcon}
-    resizeMode="contain"
-  />
-</View>
+          <Image
+            source={{ uri: 'https://static.codia.ai/image/2025-10-20/csxGWWJ4GP.png' }}
+            style={styles.eyeIcon}
+            resizeMode="contain"
+          />
+        </View>
 
         {/* Forgot Password */}
-        <TouchableOpacity style={styles.forgotPasswordContainer}>
+        <TouchableOpacity 
+          style={styles.forgotPasswordContainer}
+          disabled={loading}
+        >
           <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
         </TouchableOpacity>
         
         {/* Login Button */}
-        <TouchableOpacity style={styles.loginButton}
-          onPress={() => navigation.navigate('Home')}
->
-          <Text style={styles.loginButtonText}>Login</Text>
+        <TouchableOpacity 
+          style={[styles.loginButton, loading && styles.loginButtonDisabled]}
+          onPress={handleLogin}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#000000" />
+          ) : (
+            <Text style={styles.loginButtonText}>Login</Text>
+          )}
         </TouchableOpacity>
         
         {/* Sign Up Link */}
-      <TouchableOpacity
-  style={styles.signUpContainer}
-  onPress={() => navigation.navigate('Register')}
->
-  <Text style={styles.signUpText}>
-    First Time Here? <Text style={styles.signUpLink}>Sign up</Text>
-  </Text>
-</TouchableOpacity>
-
-        
-        {/* Or Sign In With */}
-{/* Or Sign In With */}
-<View style={styles.orContainer}>
-  <View style={styles.separatorLine} />
-  <Text style={styles.orSignInText}>Or sign in with</Text>
-  <View style={styles.separatorLine} />
-</View>
-        
-        {/* Social Login Buttons */}
-        <View style={styles.socialButtonsContainer}>
-          <TouchableOpacity style={styles.socialButton}>
-            <Image
-              source={{ uri: 'https://static.codia.ai/image/2025-10-20/fh6mQRqw2B.png' }}
-              style={styles.socialIcon}
-              resizeMode="contain"
-            />
-            <Text style={styles.socialButtonText}>Google</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.socialButton}>
-            <Image
-              source={{ uri: 'https://static.codia.ai/image/2025-10-20/7VKktezyri.png' }}
-              style={styles.socialIcon}
-              resizeMode="contain"
-            />
-            <Text style={styles.socialButtonText}>Facebook</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          style={styles.signUpContainer}
+          onPress={() => navigation.navigate('Register')}
+          disabled={loading}
+        >
+          <Text style={styles.signUpText}>
+            First Time Here? <Text style={styles.signUpLink}>Sign up</Text>
+          </Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
 };
+
+// ... (styles remain the same)
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -200,7 +297,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0F0F0',
     borderRadius: 16,
     paddingHorizontal: 18,
-    // paddingVertical: 14,d
     marginBottom: 20,
     width: '100%',
     height: 55,
@@ -245,6 +341,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
   },
+  loginButtonDisabled: {
+    backgroundColor: '#A0A0A0',
+    opacity: 0.6,
+  },
   loginButtonText: {
     fontSize: 16,
     fontWeight: '700',
@@ -262,56 +362,6 @@ const styles = StyleSheet.create({
   signUpLink: {
     color: '#CADB2A',
   },
-orContainer: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  justifyContent: 'center',
-  width: '100%',
-  marginBottom: 18,
-},
-
-separatorLine: {
-  flex: 1,
-  height: 1,
-  backgroundColor: '#FFFFFF',
-  opacity: 0.5,
-  marginHorizontal: 8,
-},
-
-orSignInText: {
-  fontFamily: 'Baloo Thambi 2',
-  fontSize: 16,
-  color: '#FFFFFF',
-  textAlign: 'center',
-},
-
-  socialButtonsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
-    gap: 15,
-  },
-  socialButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F0F0F0',
-    borderRadius: 16,
-    paddingVertical: 8,
-    paddingHorizontal: 15,
-    flex: 1,
-    height: 40,
-  },
-  socialIcon: {
-    width: 24,
-    height: 24,
-    marginRight: 12,
-  },
-  socialButtonText: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: '#000000',
-  },
 });
-
 
 export default LoginScreen;

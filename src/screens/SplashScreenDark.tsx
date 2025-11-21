@@ -12,34 +12,41 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-
-// Assuming this path is correct for your RootStackParamList definition
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { RootStackParamList } from '../navigation/AppNavigator'; 
-
-// Define the specific type for navigation within the Stack Navigator
 type SplashScreenNavigationProp = NativeStackNavigationProp<
   RootStackParamList,
   'Splash'
 >;
-
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-
 export const SplashScreenDark = () => {
-  // Cast useNavigation to the specific Stack Navigator type to expose 'replace'
   const navigation = useNavigation<SplashScreenNavigationProp>();
-
   const fadeAnim1 = useRef(new Animated.Value(0)).current;
   const fadeAnim2 = useRef(new Animated.Value(0)).current;
   const fadeAnim3 = useRef(new Animated.Value(0)).current;
   const fadeAnim4 = useRef(new Animated.Value(0)).current;
   const fadeAnim5 = useRef(new Animated.Value(0)).current;
-
   const translateY1 = useRef(new Animated.Value(-10)).current;
   const translateY2 = useRef(new Animated.Value(-10)).current;
   const translateY3 = useRef(new Animated.Value(-10)).current;
   const translateY4 = useRef(new Animated.Value(-10)).current;
   const translateY5 = useRef(new Animated.Value(-10)).current;
-
+  const checkAuthStatus = async () => {
+    try {
+      const [token, user] = await AsyncStorage.multiGet(['auth_token', 'user']);
+      
+      if (token[1] && user[1]) {
+        console.log('User is logged in, navigating to Home');
+        navigation.replace('Home');
+      } else {
+        console.log('User is not logged in, navigating to Login');
+        navigation.replace('Login');
+      }
+    } catch (error) {
+      console.error('Error checking auth status:', error);
+      navigation.replace('Login');
+    }
+  };
   useEffect(() => {
     const createAnimation = (fadeAnim: Animated.Value, translateY: Animated.Value, delay: number) => {
       return Animated.parallel([
@@ -65,8 +72,14 @@ export const SplashScreenDark = () => {
       createAnimation(fadeAnim4, translateY4, 800),
       createAnimation(fadeAnim5, translateY5, 1000),
     ]).start();
+    const authCheckTimer = setTimeout(() => {
+      checkAuthStatus();
+    }, 2000); 
+    return () => clearTimeout(authCheckTimer);
   }, []);
-
+  const handleManualNavigation = () => {
+    checkAuthStatus();
+  };
   return (
     <View style={styles.container}>
       <LinearGradient
@@ -113,26 +126,24 @@ export const SplashScreenDark = () => {
           {
             opacity: fadeAnim3,
             transform: [{ translateY: translateY3 }],
-                  fontFamily: 'Borg9', // 👈 add this line
-
+            fontFamily: 'Borg9',
           },
         ]}
       >
         Lorem Ipsum,{'\n'}Dolor Sit Amet
       </Animated.Text>
 
-  <Animated.Text
-  style={[
-    styles.description,
-    {
-      opacity: fadeAnim4,
-      transform: [{ translateY: translateY4 }],
-    },
-  ]}
->
-  Lorem ipsum dolor sit amet, consectetur{'\n'}adipiscing elit 1.
-</Animated.Text>
-
+      <Animated.Text
+        style={[
+          styles.description,
+          {
+            opacity: fadeAnim4,
+            transform: [{ translateY: translateY4 }],
+          },
+        ]}
+      >
+        Lorem ipsum dolor sit amet, consectetur{'\n'}adipiscing elit 1.
+      </Animated.Text>
 
       <Animated.View
         style={[
@@ -146,8 +157,7 @@ export const SplashScreenDark = () => {
         <TouchableOpacity
           style={styles.button}
           activeOpacity={0.8}
-          // CORRECTED: Added onPress handler and using 'replace'
-          onPress={() => navigation.replace('Login')}
+          onPress={handleManualNavigation}
         >
           <Text style={styles.buttonText}>Let's Go</Text>
         </TouchableOpacity>
@@ -185,7 +195,6 @@ const styles = StyleSheet.create({
   carImageContainer: {
     position: 'absolute',
     top: SCREEN_HEIGHT * 0.13,
-    // left: 0,
     right: 140,
     width: SCREEN_WIDTH,
     height: SCREEN_HEIGHT * 0.635,
@@ -200,19 +209,17 @@ const styles = StyleSheet.create({
     left: SCREEN_WIDTH * 0.42,
     width: SCREEN_WIDTH * 0.234,
     height: SCREEN_HEIGHT * 0.032,
-    // backgroundColor: '#232325',
   },
- heading: {
-  position: 'absolute',
-  top: SCREEN_HEIGHT * 0.678,
-  left: SCREEN_WIDTH * 0.089,
-  fontFamily: Platform.OS === 'ios' ? 'Helvetica' : 'sans-serif',
-  fontWeight: '400',
-  color: '#ffffff',
-  fontSize: SCREEN_WIDTH * 0.075,   // 🔽 reduced from 0.08
-  lineHeight: SCREEN_WIDTH * 0.088, // 🔽 reduced from 0.096
-},
-
+  heading: {
+    position: 'absolute',
+    top: SCREEN_HEIGHT * 0.678,
+    left: SCREEN_WIDTH * 0.089,
+    fontFamily: Platform.OS === 'ios' ? 'Helvetica' : 'sans-serif',
+    fontWeight: '400',
+    color: '#ffffff',
+    fontSize: SCREEN_WIDTH * 0.075,
+    lineHeight: SCREEN_WIDTH * 0.088,
+  },
   description: {
     position: 'absolute',
     top: SCREEN_HEIGHT * 0.778,
