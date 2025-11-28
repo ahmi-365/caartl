@@ -30,24 +30,24 @@ export const CarDetailScreen: React.FC<CarDetailScreenProps> = ({ car, onBack })
         {/* Header with Image */}
         <View style={styles.imageContainer}>
           <Image source={{ uri: car.imageUrl }} style={styles.image} />
-          
+
           <LinearGradient
             colors={['rgba(0,0,0,0.8)', 'transparent', 'rgba(0,0,0,0.8)']}
             style={styles.imageGradient}
           />
 
           {/* Back Button */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.backButton}
             onPress={onBack}
             activeOpacity={0.7}
           >
             <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <Path 
-                d="M15 18L9 12L15 6" 
-                stroke="#ffffff" 
-                strokeWidth="2" 
-                strokeLinecap="round" 
+              <Path
+                d="M15 18L9 12L15 6"
+                stroke="#ffffff"
+                strokeWidth="2"
+                strokeLinecap="round"
                 strokeLinejoin="round"
               />
             </Svg>
@@ -74,8 +74,8 @@ export const CarDetailScreen: React.FC<CarDetailScreenProps> = ({ car, onBack })
             </View>
             <TouchableOpacity style={styles.heartButton}>
               <Svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-                <Path 
-                  d="M14 24.5L12.075 22.75C6.3 17.64 2.5 14.23 2.5 10.15C2.5 6.74 5.24 4 8.65 4C10.64 4 12.56 4.93 14 6.42C15.44 4.93 17.36 4 19.35 4C22.76 4 25.5 6.74 25.5 10.15C25.5 14.23 21.7 17.64 15.925 22.75L14 24.5Z" 
+                <Path
+                  d="M14 24.5L12.075 22.75C6.3 17.64 2.5 14.23 2.5 10.15C2.5 6.74 5.24 4 8.65 4C10.64 4 12.56 4.93 14 6.42C15.44 4.93 17.36 4 19.35 4C22.76 4 25.5 6.74 25.5 10.15C25.5 14.23 21.7 17.64 15.925 22.75L14 24.5Z"
                   stroke="#cadb2a"
                   strokeWidth="2"
                   fill="none"
@@ -139,8 +139,8 @@ export const CarDetailScreen: React.FC<CarDetailScreenProps> = ({ car, onBack })
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Description</Text>
             <Text style={styles.description}>
-              This {car.title} {car.subtitle} is in excellent condition with only {car.mileage}km on the odometer. 
-              Perfect for daily commuting or long trips. Full service history available. 
+              This {car.title} {car.subtitle} is in excellent condition with only {car.mileage}km on the odometer.
+              Perfect for daily commuting or long trips. Full service history available.
               Don't miss this opportunity to own this amazing vehicle!
             </Text>
           </View>

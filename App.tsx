@@ -1,41 +1,38 @@
 import { StatusBar } from "expo-status-bar";
-import { StyleSheet, View } from "react-native";
 import AppNavigator from "./src/navigation/AppNavigator";
 import { ThemeProvider } from "./src/context/ThemeContext";
+import { AuthProvider } from "./src/context/AuthContext";
 import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
+import { AlertProvider } from "./src/context/AlertContext";
 import { useEffect } from "react";
 
-SplashScreen.preventAutoHideAsync(); // 👈 ensures splash stays until fonts load
+SplashScreen.preventAutoHideAsync();
 
 export default function App() {
   const [fontsLoaded] = useFonts({
-    Borg9: require("./assets/fonts/Borg9.ttf"), // 👈 your custom font
+    Borg9: require("./assets/fonts/Borg9.ttf"),
   });
 
   useEffect(() => {
+
     if (fontsLoaded) {
-      SplashScreen.hideAsync(); // 👈 hide splash after fonts loaded
+      SplashScreen.hideAsync();
     }
   }, [fontsLoaded]);
 
   if (!fontsLoaded) {
-    return null; // 👈 render nothing until font is ready
+    return null;
   }
 
   return (
     <ThemeProvider>
-      <AppNavigator />
-      <StatusBar style="auto" />
+      <AuthProvider>
+        <AlertProvider>
+          <AppNavigator />
+          <StatusBar style="auto" />
+        </AlertProvider>
+      </AuthProvider>
     </ThemeProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#fff",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-});

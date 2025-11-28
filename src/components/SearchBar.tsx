@@ -5,14 +5,14 @@ const SearchBar = () => {
   return (
     <View style={styles.container}>
       <View style={styles.searchBar}>
-        <Image 
+        <Image
           source={{ uri: 'https://static.codia.ai/image/2025-10-21/pnFPZiUkgC.png' }}
           style={styles.searchIcon}
           resizeMode="contain"
         />
         <Text style={styles.placeholder}>Search for Honda Pilot 7-Passenger</Text>
       </View>
-      <Image 
+      <Image
         source={{ uri: 'https://static.codia.ai/image/2025-10-21/9FbBdSeWEw.png' }}
         style={styles.filterIcon}
         resizeMode="contain"
