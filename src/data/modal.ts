@@ -4,34 +4,22 @@
 // CORE & SHARED MODELS
 // ===================================
 
-/**
- * Represents a Brand of a vehicle.
- */
 export interface Brand {
     id: number;
     name: string;
     image_source: string;
 }
 
-/**
- * Represents a specific model of a vehicle (e.g., CR-V for Honda).
- */
 export interface VehicleModel {
     id: number;
     name: string;
 }
 
-/**
- * Represents an interior or exterior feature of a vehicle.
- */
 export interface Feature {
     id: number;
     name: string;
 }
 
-/**
- * Represents a user of the application.
- */
 export interface User {
     id: number;
     agent_id: number | null;
@@ -45,10 +33,10 @@ export interface User {
     target: string | null;
     created_at: string;
     updated_at: string;
-    roles: string[];
-    permissions: string[];
-    // Added from register response for consistency
-    package_id?: number;
+    roles?: string[];
+    role?: string;
+    permissions?: string[];
+    package_id?: number | null;
 }
 
 
@@ -56,10 +44,16 @@ export interface User {
 // AUCTION & VEHICLE MODELS
 // ===================================
 
-/**
- * Represents the full details of a vehicle, primarily used in auctions.
- * This interface combines fields from both the auction list and auction details endpoints.
- */
+export interface VehicleImage {
+    id: number;
+    vehicle_id: number;
+    path: string;
+    is_cover: number;
+    sort_order: number;
+    created_at: string;
+    updated_at: string;
+}
+
 export interface Vehicle {
     id: number;
     title: string;
@@ -114,18 +108,26 @@ export interface Vehicle {
     bid_control: number;
     created_at: string;
     updated_at: string;
+    bids_count: number;
     brand: Brand;
     vehicle_model: VehicleModel;
     features?: Feature[];
-    images?: any[];
-    bids_count: number;
-    cover_image?: string | null;
+    images?: VehicleImage[];
+    cover_image?: VehicleImage | string | null;
+    pivot?: {
+        user_id: number;
+        vehicle_id: number;
+        created_at: string;
+        updated_at: string;
+    };
+    // If you implemented Inspections:
+    inspections?: { id: number; created_at: string }[];
 }
 
+// ===================================
+// BIDDING & PACKAGES
+// ===================================
 
-// ===================================
-// BIDDING MODELS
-// ===================================
 export interface Bid {
     id: number;
     vehicle_id: number;
@@ -143,10 +145,6 @@ export interface Bid {
     };
 }
 
-
-// ===================================
-// PACKAGE MODELS
-// ===================================
 export interface Package {
     id: number;
     name: string;
@@ -158,14 +156,10 @@ export interface Package {
     updated_at: string;
 }
 
-
 // ===================================
-// API RESPONSE WRAPPERS (Specific Endpoints)
+// API RESPONSE WRAPPERS
 // ===================================
 
-/**
- * Response shape for the POST /login endpoint.
- */
 export interface LoginResponse {
     status: string;
     access_token: string;
@@ -174,9 +168,6 @@ export interface LoginResponse {
     user: User;
 }
 
-/**
- * [NEW] Response shape for the POST /register endpoint.
- */
 export interface RegisterResponse {
     status: string;
     message: string;
@@ -184,18 +175,33 @@ export interface RegisterResponse {
     user: User;
 }
 
+export interface UserProfileResponse {
+    status: string;
+    data: User;
+}
 
-/**
- * Response shape for the POST /logout endpoint.
- */
+export interface UpdateProfileResponse {
+    status: string;
+    message: string;
+    data: User;
+}
+
 export interface LogoutResponse {
     status: string;
     message: string;
 }
 
-/**
- * Response shape for the GET /auctions/show/{id} endpoint.
- */
+export interface ToggleFavoriteResponse {
+    status: string;
+    message: string;
+    is_favorited: boolean;
+}
+
+export interface FavoritesListResponse {
+    status: string;
+    data: Vehicle[];
+}
+
 export interface AuctionDetailsResponse {
     status: string;
     data: {
@@ -209,9 +215,6 @@ export interface AuctionDetailsResponse {
     };
 }
 
-/**
- * Response shape for the GET /biddings/{id} endpoint.
- */
 export interface BiddingInfoResponse {
     status: string;
     data: {
@@ -223,9 +226,6 @@ export interface BiddingInfoResponse {
     };
 }
 
-/**
- * Response shape for the POST /place-bid/{id} endpoint.
- */
 export interface PlaceBidResponse {
     status: string;
     message: string;
@@ -240,10 +240,43 @@ export interface PlaceBidResponse {
     };
 }
 
+// [NEW] Inspection Response Wrappers
+export interface Damage {
+    id: number;
+    type: string;
+    body_part: string;
+    severity: string;
+    remark: string | null;
+    x: number;
+    y: number;
+}
+
+export interface InspectionReport {
+    id: number;
+    vehicle_id: number;
+    inspected_at: string;
+    damage_file_path: string | null;
+    file_path: string | null;
+    engineCondition: string | null;
+    transmissionCondition: string | null;
+    acCooling: string | null;
+    suspension: string | null;
+    paintCondition: string[] | null;
+    engineOil: string | null;
+    steeringOperation: string | null;
+    damages: Damage[];
+    [key: string]: any;
+}
+
+export interface InspectionResponse {
+    status: string;
+    data: InspectionReport;
+}
 
 // ===================================
 // GENERIC API WRAPPERS
 // ===================================
+
 export interface PaginatedResponse<T> {
     current_page: number;
     data: T[];

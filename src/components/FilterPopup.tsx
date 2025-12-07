@@ -1,282 +1,372 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  Modal,
   View,
   Text,
-  TouchableOpacity,
   StyleSheet,
-  Platform,
+  Modal,
+  TouchableOpacity,
+  ScrollView,
+  Dimensions,
+  ActivityIndicator,
+  TextInput,
+  Keyboard,
 } from 'react-native';
-import { Slider } from '@miblanchard/react-native-slider';
-import RNPickerSelect from 'react-native-picker-select';
+import { Feather } from '@expo/vector-icons';
+import apiService from '../services/ApiService';
+import * as Models from '../data/modal';
 
-type FilterPopupProps = {
+const { width, height } = Dimensions.get('window');
+
+interface FilterPopupProps {
   visible: boolean;
   onClose: () => void;
-  onApply: (filters: {
-    make: string;
-    model: string;
-    year: string;
-    priceRange: [number, number];
-    condition: 'all' | 'new' | 'used';
-  }) => void;
-};
+  onApply: (filters: any) => void;
+  currentFilters?: any;
+}
 
-export const FilterPopup = ({
-  visible,
-  onClose,
-  onApply,
-}: FilterPopupProps) => {
-  const [make, setMake] = useState<string>('');
-  const [model, setModel] = useState<string>('');
-  const [year, setYear] = useState<string>('');
-  const [priceRange, setPriceRange] = useState<[number, number]>([0, 3_000_000]);
-  const [condition, setCondition] = useState<'all' | 'new' | 'used'>('all');
+// --- Searchable Dropdown Component ---
+const SearchableDropdown = ({
+  label,
+  value,
+  name,
+  data,
+  onSelect,
+  renderItemLabel,
+  activeDropdown,
+  toggleDropdown
+}: any) => {
 
-  const handleApply = () => {
-    onApply({ make, model, year, priceRange, condition });
-    onClose();
-  };
+  const [searchText, setSearchText] = useState('');
+  const isOpen = activeDropdown === name;
 
-  const handleReset = () => {
-    setMake('');
-    setModel('');
-    setYear('');
-    setPriceRange([0, 3_000_000]);
-    setCondition('all');
-  };
+  useEffect(() => {
+    if (!isOpen) setSearchText('');
+  }, [isOpen]);
+
+  const filteredData = data.filter((item: any) => {
+    if (!searchText) return true;
+    const itemLabel = renderItemLabel(item).toString().toLowerCase();
+    return itemLabel.includes(searchText.toLowerCase());
+  });
 
   return (
-    <Modal
-      transparent
-      visible={visible}
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <View style={styles.overlay}>
-        <View style={styles.popup}>
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.title}>Filters</Text>
-            <TouchableOpacity onPress={onClose}>
-              <Text style={styles.close}>×</Text>
-            </TouchableOpacity>
-          </View>
+    <View style={styles.dropdownContainer}>
+      <TouchableOpacity
+        style={[styles.dropdownButton, isOpen && styles.dropdownButtonActive]}
+        onPress={() => toggleDropdown(name)}
+        activeOpacity={0.8}
+      >
+        <Text style={[styles.dropdownText, !value && { color: '#999' }]}>
+          {value || label}
+        </Text>
+        <Feather
+          name={isOpen ? "chevron-up" : "chevron-down"}
+          size={20}
+          color={isOpen ? "#cadb2a" : "#000"}
+        />
+      </TouchableOpacity>
 
-          {/* Condition Tabs – now with active underline */}
-          <View style={styles.conditionTabs}>
-            {(['all', 'new', 'used'] as const).map((tab) => (
-              <TouchableOpacity
-                key={tab}
-                style={[
-                  styles.tab,
-                  condition === tab && styles.tabActive,   // <-- active underline
-                ]}
-                onPress={() => setCondition(tab)}
-              >
-                <Text
-                  style={[
-                    styles.tabLabel,
-                    condition === tab && styles.tabLabelActive, // <-- bold label
-                  ]}
-                >
-                  {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* Dropdowns */}
-          <View style={styles.row}>
-            <View style={styles.pickerWrapper}>
-              <RNPickerSelect
-                placeholder={{ label: 'Make', value: '' }}
-                onValueChange={setMake}
-                value={make}
-                items={[
-                  { label: 'Toyota', value: 'toyota' },
-                  { label: 'Honda', value: 'honda' },
-                  { label: 'Ford', value: 'ford' },
-                ]}
-                style={pickerSelectStyles}
-              />
-            </View>
-
-            <View style={styles.pickerWrapper}>
-              <RNPickerSelect
-                placeholder={{ label: 'Model', value: '' }}
-                onValueChange={setModel}
-                value={model}
-                items={[
-                  { label: 'Camry', value: 'camry' },
-                  { label: 'Civic', value: 'civic' },
-                ]}
-                style={pickerSelectStyles}
-              />
-            </View>
-          </View>
-
-          {/* Year */}
-          <View style={styles.inputWrapper}>
-            <RNPickerSelect
-              placeholder={{ label: 'Year', value: '' }}
-              onValueChange={setYear}
-              value={year}
-              items={Array.from({ length: 30 }, (_, i) => {
-                const y = new Date().getFullYear() - i;
-                return { label: `${y}`, value: `${y}` };
-              })}
-              style={pickerSelectStyles}
+      {isOpen && (
+        <View style={styles.dropdownContent}>
+          <View style={styles.dropdownSearchContainer}>
+            <Feather name="search" size={18} color="#666" />
+            <TextInput
+              style={styles.dropdownSearchInput}
+              placeholder="Search..."
+              placeholderTextColor="#666"
+              value={searchText}
+              onChangeText={setSearchText}
             />
           </View>
 
-          {/* Price Slider */}
-          <View style={styles.sliderContainer}>
-            <Text style={styles.sliderLabel}>
-              AED {priceRange[0].toLocaleString()} – AED{' '}
-              {priceRange[1].toLocaleString()}
-            </Text>
-           <Slider
-  minimumValue={0}
-  maximumValue={3_000_000}
-  step={10_000}
-  value={priceRange}
-  onValueChange={(value: number[]) => {
-    // Assert it's a tuple of exactly 2 numbers
-    setPriceRange([value[0], value[1]] as [number, number]);
-  }}
-  minimumTrackTintColor="#ffffffff"
-  maximumTrackTintColor="#444"
-  thumbTintColor="#cadb2a"
-/>
-          </View>
+          <ScrollView
+            nestedScrollEnabled={true}
+            style={{ maxHeight: 220 }}
+            keyboardShouldPersistTaps="handled"
+          >
+            {filteredData.length > 0 ? (
+              filteredData.map((item: any, index: number) => (
+                <TouchableOpacity
+                  key={index}
+                  style={styles.dropdownItem}
+                  onPress={() => {
+                    onSelect(item);
+                    toggleDropdown(null);
+                    Keyboard.dismiss();
+                  }}
+                >
+                  <Text style={styles.dropdownItemText}>
+                    {renderItemLabel(item)}
+                  </Text>
+                </TouchableOpacity>
+              ))
+            ) : (
+              <View style={{ padding: 15 }}>
+                <Text style={{ color: '#999', textAlign: 'center' }}>
+                  No results found
+                </Text>
+              </View>
+            )}
+          </ScrollView>
+        </View>
+      )}
+    </View>
+  );
+};
 
-          {/* Buttons */}
-          <View style={styles.buttonRow}>
-            {/* <TouchableOpacity style={styles.resetBtn} onPress={handleReset}>
-              <Text style={styles.resetText}>Reset</Text>
-            </TouchableOpacity> */}
+export const FilterPopup: React.FC<FilterPopupProps> = ({ visible, onClose, onApply, currentFilters }) => {
+  const [activeTab, setActiveTab] = useState<'All' | 'New' | 'Used'>('All');
 
-            <TouchableOpacity style={styles.applyBtn} onPress={handleApply}>
-              <Text style={styles.applyText}>Search</Text>
+  const [makes, setMakes] = useState<Models.Brand[]>([]);
+  const [models, setModels] = useState<Models.VehicleModel[]>([]);
+  const [years, setYears] = useState<number[]>([]);
+
+  // Selection State
+  const [selectedMake, setSelectedMake] = useState<Models.Brand | null>(null);
+  const [selectedModel, setSelectedModel] = useState<Models.VehicleModel | null>(null);
+  const [selectedYear, setSelectedYear] = useState<number | null>(null);
+
+  const [minPrice, setMinPrice] = useState('');
+  const [maxPrice, setMaxPrice] = useState('');
+
+  const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+  const [loadingData, setLoadingData] = useState(false);
+
+  // 1. Sync State when Popup Opens
+  useEffect(() => {
+    if (visible) {
+      // Reset or Sync logic
+      if (!currentFilters || Object.keys(currentFilters).length === 0) {
+        setSelectedMake(null);
+        setSelectedModel(null);
+        setSelectedYear(null);
+        setMinPrice('');
+        setMaxPrice('');
+        setActiveTab('All');
+        setModels([]);
+      } else {
+        // Pre-fill if filters exist (simplified for numbers/strings)
+        if (currentFilters.year) setSelectedYear(currentFilters.year);
+        if (currentFilters.min_price) setMinPrice(String(currentFilters.min_price));
+        if (currentFilters.max_price) setMaxPrice(String(currentFilters.max_price));
+        if (currentFilters.condition) {
+          const cond = currentFilters.condition;
+          setActiveTab(cond.charAt(0).toUpperCase() + cond.slice(1) as any);
+        }
+      }
+
+      const loadData = async () => {
+        setLoadingData(true);
+        try {
+          const [makesRes, yearsRes] = await Promise.all([
+            apiService.getMakes(),
+            apiService.getYears()
+          ]);
+          if (makesRes.success) setMakes(makesRes.data.data);
+          if (yearsRes.success) setYears(yearsRes.data.data);
+        } catch (e) {
+          console.error(e);
+        } finally {
+          setLoadingData(false);
+        }
+      };
+      loadData();
+    }
+  }, [visible]);
+
+  // Load Models when Make changes
+  useEffect(() => {
+    if (selectedMake) {
+      const fetchModels = async () => {
+        const res = await apiService.getModels(selectedMake.id);
+        if (res.success) setModels(res.data.data);
+      };
+      fetchModels();
+      if (selectedModel && currentFilters?.make !== selectedMake.name) {
+        setSelectedModel(null);
+      }
+    } else {
+      setModels([]);
+    }
+  }, [selectedMake]);
+
+  const handleApply = () => {
+    onApply({
+      condition: activeTab === 'All' ? null : activeTab.toLowerCase(),
+      make: selectedMake?.name,
+      make_id: selectedMake?.id,
+      model: selectedModel?.name,
+      vehicle_model_id: selectedModel?.id,
+      year: selectedYear,
+      min_price: minPrice ? parseInt(minPrice) : undefined,
+      max_price: maxPrice ? parseInt(maxPrice) : undefined,
+    });
+    onClose();
+  };
+
+  const toggleDropdown = (name: string | null) => {
+    setActiveDropdown(prev => (prev === name ? null : name));
+  };
+
+  // 🔍 Validation: Check if at least one filter is active
+  const isFilterActive =
+    activeTab !== 'All' ||
+    selectedMake !== null ||
+    selectedModel !== null ||
+    selectedYear !== null ||
+    (minPrice !== '' && minPrice !== '0') ||
+    (maxPrice !== '' && maxPrice !== '0');
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.overlay}>
+        <View style={styles.popupContainer}>
+          <View style={styles.popupHeader}>
+            <Text style={styles.popupTitle}>Filter Options</Text>
+            <TouchableOpacity onPress={onClose}>
+              <Feather name="x" size={24} color="#fff" />
             </TouchableOpacity>
           </View>
+
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled
+          >
+            <View style={styles.tabsContainer}>
+              {['All', 'New', 'Used'].map((tab) => (
+                <TouchableOpacity
+                  key={tab}
+                  style={[styles.tab, activeTab === tab && styles.activeTab]}
+                  onPress={() => setActiveTab(tab as any)}
+                >
+                  <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
+                    {tab}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {loadingData && (
+              <ActivityIndicator color="#cadb2a" style={{ marginBottom: 10 }} />
+            )}
+
+            <View style={styles.formContainer}>
+              <SearchableDropdown
+                label="Select Make"
+                name="make"
+                value={selectedMake?.name}
+                data={makes}
+                renderItemLabel={(item: any) => item.name}
+                onSelect={setSelectedMake}
+                activeDropdown={activeDropdown}
+                toggleDropdown={toggleDropdown}
+              />
+
+              <SearchableDropdown
+                label="Select Model"
+                name="model"
+                value={selectedModel?.name}
+                data={selectedMake ? models : []}
+                renderItemLabel={(item: any) => item.name}
+                onSelect={setSelectedModel}
+                activeDropdown={activeDropdown}
+                toggleDropdown={toggleDropdown}
+              />
+
+              <SearchableDropdown
+                label="Select Year"
+                name="year"
+                value={selectedYear?.toString()}
+                data={years}
+                renderItemLabel={(item: any) => item.toString()}
+                onSelect={setSelectedYear}
+                activeDropdown={activeDropdown}
+                toggleDropdown={toggleDropdown}
+              />
+            </View>
+
+            <View style={styles.priceSection}>
+              <Text style={styles.sectionTitle}>Price Range (AED)</Text>
+
+              <View style={styles.priceInputRow}>
+                <View style={styles.priceInputContainer}>
+                  <Text style={styles.priceLabel}>Min</Text>
+                  <TextInput
+                    style={styles.priceInput}
+                    placeholder="0"
+                    placeholderTextColor="#666"
+                    keyboardType="numeric"
+                    value={minPrice}
+                    onChangeText={setMinPrice}
+                  />
+                </View>
+
+                <View style={styles.priceDivider} />
+
+                <View style={styles.priceInputContainer}>
+                  <Text style={styles.priceLabel}>Max</Text>
+                  <TextInput
+                    style={styles.priceInput}
+                    placeholder="Any"
+                    placeholderTextColor="#666"
+                    keyboardType="numeric"
+                    value={maxPrice}
+                    onChangeText={setMaxPrice}
+                  />
+                </View>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.searchButton, !isFilterActive && styles.searchButtonDisabled]}
+              onPress={handleApply}
+              disabled={!isFilterActive}
+            >
+              <Text style={[styles.searchButtonText, !isFilterActive && styles.searchButtonTextDisabled]}>
+                Apply Filters
+              </Text>
+            </TouchableOpacity>
+
+            <View style={{ height: 20 }} />
+          </ScrollView>
         </View>
       </View>
     </Modal>
   );
 };
 
-/* ------------------------------------------------------------------ */
-/* Styles                                                            */
-/* ------------------------------------------------------------------ */
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  popup: {
-    width: '88%',
-    backgroundColor: '#121212',
-    borderRadius: 16,
-    padding: 20,
-    /*** NEW: border around the popup ***/
-    borderWidth: 2,
-    borderColor: '#cadb2a',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-      },
-      android: { elevation: 8 },
-    }),
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  title: { fontFamily: 'Poppins', fontWeight: '600', fontSize: 20, color: '#fff' },
-  close: { fontSize: 28, color: '#cadb2a' },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center' },
+  popupContainer: { width: width * 0.9, height: height * 0.85, backgroundColor: '#111', borderRadius: 30, paddingVertical: 20, borderWidth: 1, borderColor: '#cadb2a', overflow: 'hidden' },
+  popupHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 10 },
+  popupTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold', fontFamily: 'Poppins' },
+  scrollContent: { paddingHorizontal: 20 },
+  tabsContainer: { flexDirection: 'row', marginBottom: 20, justifyContent: 'center', backgroundColor: '#222', borderRadius: 12, padding: 4 },
+  tab: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 10 },
+  activeTab: { backgroundColor: '#cadb2a' },
+  tabText: { color: '#888', fontSize: 14, fontWeight: '600', fontFamily: 'Poppins' },
+  activeTabText: { color: '#000' },
+  formContainer: { marginBottom: 20 },
+  dropdownContainer: { marginBottom: 15 },
+  dropdownButton: { backgroundColor: '#fff', borderRadius: 12, height: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 15 },
+  dropdownButtonActive: { borderWidth: 2, borderColor: '#cadb2a' },
+  dropdownText: { fontSize: 14, fontFamily: 'Poppins', color: '#000' },
+  dropdownContent: { backgroundColor: '#fff', marginTop: 5, borderRadius: 12, overflow: 'hidden', paddingBottom: 5 },
+  dropdownSearchContainer: { flexDirection: 'row', alignItems: 'center', padding: 10, borderBottomWidth: 1, borderBottomColor: '#eee', backgroundColor: '#f9f9f9' },
+  dropdownSearchInput: { flex: 1, marginLeft: 10, fontSize: 14, color: '#000', height: 36, fontFamily: 'Poppins' },
+  dropdownItem: { padding: 15, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
+  dropdownItemText: { fontSize: 14, fontFamily: 'Poppins', color: '#333' },
+  priceSection: { marginBottom: 20 },
+  sectionTitle: { color: '#fff', fontSize: 14, marginBottom: 10, fontFamily: 'Poppins', fontWeight: '600' },
+  priceInputRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  priceInputContainer: { flex: 1, backgroundColor: '#222', borderRadius: 12, padding: 10 },
+  priceLabel: { color: '#888', fontSize: 10, marginBottom: 2, fontFamily: 'Poppins' },
+  priceInput: { color: '#fff', fontSize: 16, fontFamily: 'Poppins', padding: 0 },
+  priceDivider: { width: 10 },
 
-  /* Condition tabs */
-  conditionTabs: {
-    flexDirection: 'row',
-    marginBottom: 20,
-    borderBottomWidth: 1,
-    borderColor: '#333',
-  },
-  tab: { flex: 1, paddingVertical: 10, alignItems: 'center' },
-  /*** NEW: active underline ***/
-  tabActive: { borderBottomWidth: 2, borderColor: '#cadb2a' },
-  tabLabel: { fontFamily: 'Poppins', fontSize: 15, color: '#cadb2a' },
-  /*** NEW: active label style ***/
-  tabLabelActive: { color: '#cadb2a', fontWeight: '600' },
-
-  /* Dropdown row */
-  row: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-  pickerWrapper: { flex: 0.48 },
-
-  inputWrapper: { marginBottom: 20 },
-
-  /* Slider */
-  sliderContainer: { marginBottom: 24 },
-  sliderLabel: { color: '#cadb2a', fontFamily: 'Poppins', marginBottom: 8, textAlign: 'center' },
-
-  /* Buttons */
-buttonRow: {
-    marginTop: 20,
-    alignItems: 'center',          // <-- centre children horizontally
-  },  resetBtn: {
-    // flex: 0.45,
-    backgroundColor: '#333',
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  resetText: { color: '#fff', fontFamily: 'Poppins', fontWeight: '500' },
- applyBtn: {
-    /* keep the same look, just make it a little wider */
-    minWidth: 180,
-    backgroundColor: '#cadb2a',
-    borderRadius: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 32,
-    alignItems: 'center',
-  },
-applyText: {
-    color: '#000',
-    fontFamily: 'Poppins',
-    fontWeight: '600',
-    fontSize: 16,
-  },});
-
-/* PickerSelect custom styles */
-const pickerSelectStyles = StyleSheet.create({
-  inputIOS: {
-    fontSize: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 10,
-    borderWidth: 1,
-    borderColor: '#444',
-    borderRadius: 8,
-    color: '#fff',
-    backgroundColor: '#1e1e1e',
-  },
-  inputAndroid: {
-    fontSize: 16,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: '#444',
-    borderRadius: 8,
-    color: '#fff',
-    backgroundColor: '#1e1e1e',
-  },
-  placeholder: { color: '#888' },
+  searchButton: { backgroundColor: '#cadb2a', height: 55, borderRadius: 15, justifyContent: 'center', alignItems: 'center', marginTop: 10 },
+  searchButtonDisabled: { backgroundColor: '#333' },
+  searchButtonText: { color: '#000', fontSize: 16, fontWeight: 'bold', fontFamily: 'Poppins' },
+  searchButtonTextDisabled: { color: '#666' },
 });

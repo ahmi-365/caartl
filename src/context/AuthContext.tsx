@@ -10,6 +10,7 @@ interface AuthContextType {
     login: (credentials: any) => Promise<boolean>;
     register: (userData: any) => Promise<boolean>;
     logout: () => void;
+    updateUser: (user: Models.User) => void;
 }
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
@@ -26,14 +27,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             try {
                 token = await AsyncStorage.getItem('userToken');
                 const userDataString = await AsyncStorage.getItem('userData');
+
                 if (userDataString) {
                     userData = JSON.parse(userDataString);
                 }
+
                 if (token) {
-                    const { success } = await apiService.apiCall('/user/profile', {
-                        headers: { Authorization: `Bearer ${token}` },
-                    });
-                    if (!success) {
+                    // Validate token with profile endpoint
+                    const result = await apiService.getUserProfile();
+
+                    // If successful (success: true means 200 OK and valid JSON)
+                    if (result.success && result.data.data) {
+                        userData = result.data.data;
+                        await AsyncStorage.setItem('userData', JSON.stringify(userData));
+                    } else {
+                        // If result.success is false (e.g. 401 or HTML error), log out.
+                        console.log("Token invalid, expired, or server error. Logging out.");
                         token = null;
                         userData = null;
                         await AsyncStorage.multiRemove(['userToken', 'userData']);
@@ -41,18 +50,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 }
             } catch (e) {
                 console.error('Restoring auth state failed', e);
+                token = null;
+                userData = null;
             } finally {
                 setUserToken(token);
                 setUser(userData);
+                setIsLoading(false);
             }
         };
 
-        const minDisplayTime = new Promise(resolve => setTimeout(resolve, 2500));
-        const authCheck = bootstrapAsync();
-
-        Promise.all([minDisplayTime, authCheck]).then(() => {
-            setIsLoading(false);
-        });
+        bootstrapAsync();
     }, []);
 
     const login = async (credentials: any) => {
@@ -86,6 +93,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         await AsyncStorage.multiRemove(['userToken', 'userData']);
     };
 
+    const updateUser = async (newUser: Models.User) => {
+        setUser(newUser);
+        await AsyncStorage.setItem('userData', JSON.stringify(newUser));
+    };
+
     const value = {
         userToken,
         user,
@@ -93,9 +105,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         login,
         register,
         logout,
+        updateUser,
     };
 
-    // FIXED: The closing tag now correctly matches the opening tag.
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 

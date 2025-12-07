@@ -1,16 +1,27 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Models from '../data/modal'; // Make sure this path is correct
+import * as Models from '../data/modal';
+
+// Define interface for filter parameters
+export interface AuctionFilters {
+  search?: string;
+  make?: string;
+  model?: string;
+  make_id?: number;
+  vehicle_model_id?: number;
+  year?: number;
+  condition?: string;
+  min_price?: number;
+  max_price?: number;
+}
 
 // API Configuration
 class ApiService {
   baseURL: string;
 
   constructor() {
-    // Using the base URL as specified.
     this.baseURL = 'https://api.caartl.com/api';
   }
 
-  // Get stored token from AsyncStorage
   async getToken() {
     try {
       return await AsyncStorage.getItem('userToken');
@@ -20,12 +31,6 @@ class ApiService {
     }
   }
 
-  /**
-   * Generic method for making API calls.
-   * It automatically attaches the Authorization header if a token exists.
-   * This is perfect for your requirement, as the token will be null for login/register
-   * and present for all other authenticated calls.
-   */
   async apiCall<T>(endpoint: string, options: RequestInit = {}): Promise<Models.ApiResult<T>> {
     const url = `${this.baseURL}${endpoint}`;
     const token = await this.getToken();
@@ -33,7 +38,8 @@ class ApiService {
     const defaultOptions: RequestInit = {
       headers: {
         'Content-Type': 'application/json',
-        // Conditionally add the Authorization header only if a token exists
+        // Add Accept header to encourage JSON response
+        'Accept': 'application/json',
         ...(token && { Authorization: `Bearer ${token}` }),
       },
     };
@@ -46,6 +52,15 @@ class ApiService {
 
     try {
       const response = await fetch(url, finalOptions);
+
+      // Handle non-OK responses (like 401 Unauthorized)
+      if (!response.ok) {
+        if (response.status === 401) {
+          return { success: false, status: 401, data: { message: 'Unauthorized' } as any };
+        }
+      }
+
+      // Attempt to parse JSON. If the server returns HTML (error page), this throws.
       const data = await response.json();
       return { success: response.ok, status: response.status, data };
     } catch (error) {
@@ -53,75 +68,119 @@ class ApiService {
       return {
         success: false,
         status: 0,
-        data: { message: 'Network error or invalid JSON response.' } as any,
+        data: { message: 'Network error or invalid response format.' } as any,
       };
     }
   }
 
+
+  async getVehicleDetails(id: number): Promise<Models.ApiResult<{ status: string, data: Models.Vehicle }>> {
+    return this.apiCall(`/admin/vehicles/show/${id}`);
+  }
   // ===================================
-  // AUTHENTICATION APIs (No Token Sent)
+  // AUTH & USER APIs
   // ===================================
 
   async register(userData: any): Promise<Models.ApiResult<Models.RegisterResponse>> {
-    return this.apiCall('/register', {
-      method: 'POST',
-      body: JSON.stringify(userData),
-    });
+    return this.apiCall('/register', { method: 'POST', body: JSON.stringify(userData) });
   }
 
   async login(credentials: any): Promise<Models.ApiResult<Models.LoginResponse>> {
-    return this.apiCall('/login', {
-      method: 'POST',
-      body: JSON.stringify(credentials),
-    });
+    return this.apiCall('/login', { method: 'POST', body: JSON.stringify(credentials) });
   }
-
-  // ===================================
-  // AUTHENTICATED APIs (Token is Sent)
-  // ===================================
 
   async logout(): Promise<Models.ApiResult<Models.LogoutResponse>> {
     return this.apiCall('/logout', { method: 'POST' });
   }
 
-  // --- AUCTION APIs ---
-  async getAuctions(perPage: number = 10): Promise<Models.ApiResult<Models.ApiResponse<Models.PaginatedResponse<Models.Vehicle>>>> {
-    return this.apiCall(`/auctions?per_page=${perPage}`);
+  async getUserProfile(): Promise<Models.ApiResult<Models.UserProfileResponse>> {
+    return this.apiCall('/profile');
+  }
+
+  async updateUserProfile(userData: { name: string; email: string; phone: string; bio: string }): Promise<Models.ApiResult<Models.UpdateProfileResponse>> {
+    return this.apiCall('/user/profile/update', { method: 'POST', body: JSON.stringify(userData) });
+  }
+
+  async changePassword(payload: { current_password: string; new_password: string; confirm_password: string }): Promise<Models.ApiResult<any>> {
+    return this.apiCall('/user/profile/change-password', { method: 'POST', body: JSON.stringify(payload) });
+  }
+
+  // ===================================
+  // FAVORITES APIs
+  // ===================================
+
+  async toggleFavorite(vehicleId: number): Promise<Models.ApiResult<Models.ToggleFavoriteResponse>> {
+    return this.apiCall('/favorites/toggle', { method: 'POST', body: JSON.stringify({ vehicle_id: vehicleId }) });
+  }
+
+  async getFavorites(): Promise<Models.ApiResult<Models.FavoritesListResponse>> {
+    return this.apiCall('/favorites');
+  }
+
+  // ===================================
+  // AUCTION APIs
+  // ===================================
+
+  async getAuctions(
+    perPage: number = 10,
+    page: number = 1,
+    filters: AuctionFilters = {}
+  ): Promise<Models.ApiResult<Models.ApiResponse<Models.PaginatedResponse<Models.Vehicle>>>> {
+
+    let query = `/auctions?per_page=${perPage}&page=${page}`;
+
+    if (filters.search) query += `&search=${encodeURIComponent(filters.search)}`;
+
+    if (filters.make) query += `&make=${encodeURIComponent(filters.make)}`;
+    else if (filters.make_id) query += `&make_id=${filters.make_id}`;
+
+    if (filters.model) query += `&model=${encodeURIComponent(filters.model)}`;
+    else if (filters.vehicle_model_id) query += `&vehicle_model_id=${filters.vehicle_model_id}`;
+
+    if (filters.year) query += `&year=${filters.year}`;
+    if (filters.condition) query += `&condition=${filters.condition}`;
+    if (filters.min_price) query += `&min_price=${filters.min_price}`;
+    if (filters.max_price) query += `&max_price=${filters.max_price}`;
+
+    return this.apiCall(query);
   }
 
   async getAuctionDetails(id: number): Promise<Models.ApiResult<Models.AuctionDetailsResponse>> {
     return this.apiCall(`/auctions/show/${id}`);
   }
 
-  // --- BIDDING APIs ---
+  // ===================================
+  // INSPECTION API
+  // ===================================
+  async getInspectionReport(inspectionId: number): Promise<Models.ApiResult<Models.InspectionResponse>> {
+    return this.apiCall(`/admin/inspection-reports/show/${inspectionId}`);
+  }
+
+  // ===================================
+  // BIDDING APIs
+  // ===================================
   async getBiddingInfo(auctionId: number): Promise<Models.ApiResult<Models.BiddingInfoResponse>> {
     return this.apiCall(`/biddings/${auctionId}`);
   }
 
   async placeBid(auctionId: number, bidData: { current_bid: number; max_bid: number }): Promise<Models.ApiResult<Models.PlaceBidResponse>> {
-    return this.apiCall(`/place-bid/${auctionId}`, {
-      method: 'POST',
-      body: JSON.stringify(bidData),
-    });
+    return this.apiCall(`/place-bid/${auctionId}`, { method: 'POST', body: JSON.stringify(bidData) });
   }
 
   async getBidHistory(auctionId: number): Promise<Models.ApiResult<Models.ApiResponse<Models.Bid[]>>> {
     return this.apiCall(`/bid-history/${auctionId}`);
   }
 
-  // --- BOOKING API (Special handling for FormData) ---
+  // ===================================
+  // BOOKING API
+  // ===================================
   async bookNow(bookingData: FormData): Promise<Models.ApiResult<any>> {
     const url = `${this.baseURL}/bookings/book-now`;
     const token = await this.getToken();
-
     try {
-      // For FormData, we don't set 'Content-Type'. Fetch does it automatically.
       const response = await fetch(url, {
         method: 'POST',
-        headers: {
-          // We still need to add the Authorization header manually here.
-          ...(token && { Authorization: `Bearer ${token}` }),
-        },
+        headers: { ...(token && { Authorization: `Bearer ${token}` }) },
         body: bookingData,
       });
       const data = await response.json();
@@ -132,14 +191,29 @@ class ApiService {
     }
   }
 
-  // --- PACKAGES API ---
+  // ===================================
+  // FILTER DATA & PACKAGES
+  // ===================================
   async getPackages(): Promise<Models.ApiResult<Models.ApiResponse<Models.PaginatedResponse<Models.Package>>>> {
-    // Note: The endpoint is /admin/packages as per your documentation
     return this.apiCall('/admin/packages');
   }
 
+  async getMakes(search: string = '') {
+    let query = '/all-makes';
+    if (search) query += `?search=${encodeURIComponent(search)}`;
+    return this.apiCall<{ status: string, data: Models.Brand[] }>(query);
+  }
+
+  async getModels(makeId: number) {
+    return this.apiCall<{ status: string, data: Models.VehicleModel[] }>(`/models/${makeId}`);
+  }
+
+  async getYears() {
+    return this.apiCall<{ status: string, data: number[] }>('/years');
+  }
+
   // ===================================
-  // USER DATA & SESSION MANAGEMENT
+  // STORAGE HELPERS
   // ===================================
 
   async storeUserData(user: Models.User, token: string) {
@@ -157,12 +231,8 @@ class ApiService {
     try {
       const userData = await AsyncStorage.getItem('userData');
       return userData ? JSON.parse(userData) : null;
-    } catch (error) {
-      console.error('Error getting user data:', error);
-      return null;
-    }
+    } catch (error) { return null; }
   }
 }
 
-// Export a singleton instance so the whole app uses the same object
 export default new ApiService();

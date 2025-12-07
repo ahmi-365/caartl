@@ -2,37 +2,45 @@ import React, { useEffect } from 'react';
 import { TouchableOpacity, View, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
-import { useNavigation, useIsFocused } from '@react-navigation/native';
-import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { useNavigation, useIsFocused, useRoute } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 
-/* ------------------------------------------------------------------ */
-type NavProp = BottomTabNavigationProp<RootStackParamList>;
-/* ------------------------------------------------------------------ */
+// Use RootStackParamList here since we are navigating the root stack
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 export const BottomNav = () => {
-  const navigation = useNavigation<NavProp>();
+  const navigation = useNavigation<NavigationProp>();
   const isFocused = useIsFocused();
+  const route = useRoute();
 
   const [active, setActive] = React.useState<'home' | 'favorites' | 'profile'>('home');
 
-  /* -------------------------------------------------------------- */
-  /*  Sync active state with current route                          */
-  /* -------------------------------------------------------------- */
   useEffect(() => {
     if (!isFocused) return;
 
-    const state = navigation.getState();
-    const currentRouteName = state.routes[state.index]?.name;
+    // Check route names. 'HomeTab' is inside DrawerRoot.
+    // 'FavoritesScreen' and 'ProfileScreen' are direct stack screens.
+    if (route.name === 'HomeTab' || route.name === 'DrawerRoot') setActive('home');
+    else if (route.name === 'FavoritesScreen') setActive('favorites');
+    else if (route.name === 'ProfileScreen') setActive('profile');
+  }, [isFocused, route.name]);
 
-    if (currentRouteName === 'Home') setActive('home');
-    else if (currentRouteName === 'FavoritesScreen') setActive('favorites');
-    else if (currentRouteName === 'ProfileScreen') setActive('profile');
-  }, [isFocused, navigation]);
+  const goHome = () => {
+    setActive('home');
+    // Navigate to the DrawerRoot which shows Home
+    // We use 'reset' to clear history if coming from other tabs to mimic tab behavior
+    navigation.navigate('DrawerRoot');
+  };
 
-  const go = (screen: keyof RootStackParamList, id: 'home' | 'favorites' | 'profile') => {
-    setActive(id);
-    navigation.navigate(screen);
+  const goFavorites = () => {
+    setActive('favorites');
+    navigation.navigate('FavoritesScreen');
+  };
+
+  const goProfile = () => {
+    setActive('profile');
+    navigation.navigate('ProfileScreen');
   };
 
   return (
@@ -44,7 +52,7 @@ export const BottomNav = () => {
         {/* ---------- HOME ---------- */}
         <TouchableOpacity
           style={styles.navItem}
-          onPress={() => go('Home', 'home')}
+          onPress={goHome}
           activeOpacity={0.7}
         >
           <Svg width="34" height="34" viewBox="0 0 34 34" fill="none">
@@ -60,7 +68,7 @@ export const BottomNav = () => {
         {/* ---------- FAVORITES ---------- */}
         <TouchableOpacity
           style={styles.navItem}
-          onPress={() => go('FavoritesScreen', 'favorites')}
+          onPress={goFavorites}
           activeOpacity={0.7}
         >
           <Svg width="34" height="34" viewBox="0 0 34 34" fill="none">
@@ -76,7 +84,7 @@ export const BottomNav = () => {
         {/* ---------- PROFILE ---------- */}
         <TouchableOpacity
           style={styles.navItem}
-          onPress={() => go('ProfileScreen', 'profile')}
+          onPress={goProfile}
           activeOpacity={0.7}
         >
           <Svg width="34" height="34" viewBox="0 0 34 34" fill="none">
