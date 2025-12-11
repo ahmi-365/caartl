@@ -98,17 +98,34 @@ export const CarCard: React.FC<CarCardProps> = ({
   const buyNowPrice = car.price ? Number(car.price).toLocaleString() : 'N/A';
 
   // --- FIXED IMAGE LOGIC ---
+  // --- FIXED IMAGE LOGIC ---
   let imageUrl = 'https://c.animaapp.com/mg9397aqkN2Sch/img/tesla.png'; // Default fallback
 
+  // 1. Check if the API provided a direct 'cover_image' object or string
   if (car.cover_image) {
     if (typeof car.cover_image === 'string') {
       imageUrl = car.cover_image;
-    } else if (car.cover_image.path) {
-      imageUrl = car.cover_image.path;
+    } else if (typeof car.cover_image === 'object' && (car.cover_image as any).path) {
+      imageUrl = (car.cover_image as any).path;
     }
-  } else if (car.brand?.image_source) {
+  }
+  // 2. Check the 'images' array (This matches your provided JSON structure)
+  else if (car.images && Array.isArray(car.images) && car.images.length > 0) {
+    // Find the image where is_cover is 1
+    const coverObj = car.images.find((img: any) => img.is_cover === 1);
+
+    if (coverObj && coverObj.path) {
+      imageUrl = coverObj.path;
+    } else {
+      // If no image is marked as cover, just take the first one
+      imageUrl = car.images[0].path;
+    }
+  }
+  // 3. Fallback to brand image if no car photos exist
+  else if (car.brand?.image_source) {
     imageUrl = car.brand.image_source;
   }
+  // -------------------------
   // -------------------------
 
   return (

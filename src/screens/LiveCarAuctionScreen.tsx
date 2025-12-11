@@ -58,11 +58,10 @@ export default function LiveCarAuctionScreen() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  // 1. Static Data (Images, Features) from /auctions/show/:id
+  // 1. Static Data
   const [staticData, setStaticData] = useState<Models.AuctionDetailsResponse['data'] | null>(null);
-  // 2. Live Data (Bids, Timer) from /biddings/:id
+  // 2. Live Data
   const [biddingData, setBiddingData] = useState<Models.BiddingInfoResponse['data'] | null>(null);
-  // Refs for timer loop
   const biddingDataRef = useRef<Models.BiddingInfoResponse['data'] | null>(null);
 
   const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
@@ -73,7 +72,7 @@ export default function LiveCarAuctionScreen() {
   // Image Preview State
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
-  // --- 1. Fetch Rich Details (Images/Features) ---
+  // --- Fetch Data ---
   useEffect(() => {
     const fetchStaticDetails = async () => {
       try {
@@ -93,7 +92,6 @@ export default function LiveCarAuctionScreen() {
     fetchStaticDetails();
   }, [carId]);
 
-  // --- 2. Poll Live Bidding Data ---
   const fetchLiveBidData = async () => {
     try {
       const result = await apiService.getBiddingInfo(carId);
@@ -118,8 +116,8 @@ export default function LiveCarAuctionScreen() {
   };
 
   useEffect(() => {
-    fetchLiveBidData(); // Initial call
-    const interval = setInterval(fetchLiveBidData, 3000); // Poll every 3s
+    fetchLiveBidData();
+    const interval = setInterval(fetchLiveBidData, 3000);
     return () => clearInterval(interval);
   }, [carId]);
 
@@ -130,8 +128,6 @@ export default function LiveCarAuctionScreen() {
       if (!data?.vehicle) return;
 
       const now = new Date();
-
-      // 1. Auction Countdown
       const endDate = new Date(data.vehicle.auction_end_date.replace(' ', 'T'));
       const difference = +endDate - +now;
 
@@ -146,7 +142,6 @@ export default function LiveCarAuctionScreen() {
         setCountdown({ days: 0, hours: 0, minutes: 0, seconds: 0 });
       }
 
-      // 2. Leading Timer
       if (data.bids && data.bids.length > 0) {
         const lastBidTime = new Date(data.bids[0].updated_at);
         const elapsed = +now - +lastBidTime;
@@ -169,7 +164,6 @@ export default function LiveCarAuctionScreen() {
     return () => clearInterval(timer);
   }, []);
 
-  // --- Handlers ---
   const handleIncrement = () => {
     const increment = Number(biddingData?.vehicle.bid_control || 100);
     setMyBid(prev => prev + increment);
@@ -218,26 +212,50 @@ export default function LiveCarAuctionScreen() {
   const vehicleVisuals = staticData.vehicle;
   const vehicleLive = biddingData?.vehicle || staticData.vehicle;
 
-  // --- IMAGE LOGIC ---
-  const rawImages = vehicleVisuals.images && vehicleVisuals.images.length > 0
+  // ==========================================================
+  // FIX: UPDATED IMAGE LOGIC
+  // ==========================================================
+
+  const rawImages = vehicleVisuals.images && Array.isArray(vehicleVisuals.images)
     ? vehicleVisuals.images
     : [];
 
-  const imageList: string[] = rawImages.map((img: any) => img.path);
+  // 1. Determine Main Image
+  let mainImage = '';
 
-  if (imageList.length === 0) {
-    if (vehicleVisuals.cover_image) {
-      const cover = typeof vehicleVisuals.cover_image === 'string' ? vehicleVisuals.cover_image : vehicleVisuals.cover_image.path;
-      imageList.push(cover);
-    }
-    else if (vehicleVisuals.brand?.image_source) imageList.push(vehicleVisuals.brand.image_source);
-    else imageList.push('https://c.animaapp.com/mg9397aqkN2Sch/img/tesla.png');
+  // Priority A: Find the specific image object where is_cover == 1 inside the array
+  const coverImageObject = rawImages.find((img: any) => img.is_cover === 1 || img.is_cover === true);
+
+  if (coverImageObject) {
+    mainImage = coverImageObject.path;
+  }
+  // Priority B: Check the direct 'cover_image' property (fallback)
+  else if (vehicleVisuals.cover_image) {
+    mainImage = typeof vehicleVisuals.cover_image === 'string'
+      ? vehicleVisuals.cover_image
+      : vehicleVisuals.cover_image.path;
+  }
+  // Priority C: Use the first image in the array
+  else if (rawImages.length > 0) {
+    mainImage = rawImages[0].path;
+  }
+  // Priority D: Placeholder
+  else {
+    mainImage = vehicleVisuals.brand?.image_source || 'https://c.animaapp.com/mg9397aqkN2Sch/img/tesla.png';
   }
 
-  const mainImage = imageList[0];
-  const thumbImages = imageList.length > 1 ? imageList.slice(0, 3) : [];
+  // 2. Prepare Thumbnails (Just show the first 3 from the list)
+  const imageList: string[] = rawImages.map((img: any) => img.path);
+  // Ensure we have something in the list for the thumbnails if rawImages was empty but mainImage exists
+  if (imageList.length === 0 && mainImage) {
+    imageList.push(mainImage);
+  }
 
-  // --- LIVE VALUES ---
+  const thumbImages = imageList.length > 1 ? imageList.slice(0, 3) : imageList;
+
+  // ==========================================================
+
+  // Live Values
   const highestBid = biddingData?.highest_bid;
   const currentBidDisplay = highestBid ? Number(highestBid).toLocaleString() : Number(vehicleLive.starting_bid_amount).toLocaleString();
   const expectedPrice = Number(vehicleLive.price).toLocaleString();
@@ -275,22 +293,29 @@ export default function LiveCarAuctionScreen() {
 
           {/* Main Car Image Card */}
           <View style={styles.imageCard}>
-            <TouchableOpacity onPress={() => setPreviewImage(mainImage)} activeOpacity={0.9}>
-              <Image source={{ uri: mainImage }} style={styles.carImage} resizeMode="cover" />
+            {/* FIX: Added style to TouchableOpacity so it fills the parent View */}
+            <TouchableOpacity
+              onPress={() => setPreviewImage(mainImage)}
+              activeOpacity={0.9}
+              style={{ width: '100%', height: '100%' }}
+            >
+              <Image
+                source={{ uri: mainImage }}
+                style={styles.carImage}
+                resizeMode="cover"
+              />
             </TouchableOpacity>
 
-            <LinearGradient colors={['transparent', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.95)']} style={styles.imageOverlay}>
+            <LinearGradient colors={['transparent', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.95)']} style={styles.imageOverlay} pointerEvents="none">
               <View style={styles.favoriteIcon}>
                 <MaterialCommunityIcons name="heart" size={20} color="#fff" />
               </View>
 
-              {/* Layout Matching Image: Title/Model Top Left */}
               <View style={styles.overlayHeader}>
                 <Text style={styles.carBrand}>{vehicleVisuals.brand?.name}</Text>
                 <Text style={styles.carModel}>{vehicleVisuals.vehicle_model?.name}</Text>
               </View>
 
-              {/* Prices Row */}
               <View style={styles.cardStatsRow}>
                 <View style={styles.priceBox}>
                   <Text style={styles.cardLabel}>Current Bid</Text>
@@ -303,7 +328,6 @@ export default function LiveCarAuctionScreen() {
                 </View>
               </View>
 
-              {/* Tags Bottom */}
               <View style={styles.tagsRow}>
                 <View style={styles.tag}><Text style={styles.tagText}>{totalBids} Bids</Text></View>
                 <View style={styles.tag}><Text style={styles.tagText}>{vehicleVisuals.year}</Text></View>
@@ -321,7 +345,10 @@ export default function LiveCarAuctionScreen() {
                   <Image source={{ uri: imgUri }} style={styles.thumbnail} />
                 </TouchableOpacity>
               ))}
-              {[...Array(3 - thumbImages.length)].map((_, i) => <View key={`empty-${i}`} style={[styles.thumbnail, { borderWidth: 0, backgroundColor: 'transparent' }]} />)}
+              {/* Fill remaining space if less than 3 images */}
+              {[...Array(Math.max(0, 3 - thumbImages.length))].map((_, i) => (
+                <View key={`empty-${i}`} style={[styles.thumbnail, { borderWidth: 0, backgroundColor: 'transparent' }]} />
+              ))}
             </View>
           )}
 
@@ -402,7 +429,6 @@ export default function LiveCarAuctionScreen() {
           <View style={{ height: 40 }} />
         </ScrollView>
 
-        {/* Image Preview Modal */}
         <ImagePreviewModal
           visible={!!previewImage}
           imageUrl={previewImage || ''}
@@ -425,27 +451,21 @@ const styles = StyleSheet.create({
   leadingText: { color: '#ccc', fontSize: 14, fontFamily: 'Poppins', fontWeight: '500' },
   smallTimerBadge: { backgroundColor: '#cadb2a', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 8 },
   smallTimerText: { color: '#000', fontWeight: 'bold', fontSize: 14 },
-
-  // Image Card Styles
   imageCard: { marginHorizontal: 16, height: 300, borderRadius: 16, overflow: 'hidden', marginBottom: 10, backgroundColor: '#000', borderColor: '#222', borderWidth: 1 },
   carImage: { width: '100%', height: '100%' },
   imageOverlay: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, padding: 15, justifyContent: 'flex-end' },
   favoriteIcon: { position: 'absolute', top: 15, right: 15 },
-
   overlayHeader: { marginBottom: 10 },
   carBrand: { color: '#fff', fontSize: 18, fontWeight: 'bold', fontFamily: 'Poppins', marginBottom: 2 },
   carModel: { color: '#fff', fontSize: 24, fontWeight: 'bold', fontFamily: 'Poppins' },
-
   cardStatsRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
   priceBox: { backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
   cardLabel: { color: '#aaa', fontSize: 10, fontFamily: 'Poppins' },
   cardValue: { color: '#fff', fontSize: 16, fontWeight: 'bold', fontFamily: 'Poppins' },
   verticalLine: { width: 1, height: 25, backgroundColor: 'rgba(255,255,255,0.4)', marginHorizontal: 10 },
-
   tagsRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
   tag: { backgroundColor: 'rgba(255,255,255,0.3)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 },
   tagText: { color: '#fff', fontSize: 10, fontFamily: 'Poppins', fontWeight: '600' },
-
   thumbnailRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16, marginBottom: 20 },
   thumbnail: { width: (width - 52) / 3, height: 70, borderRadius: 8, borderWidth: 1, borderColor: '#cadb2a' },
   countdownGrid: { flexDirection: 'row', justifyContent: 'center', gap: 12, marginBottom: 20 },

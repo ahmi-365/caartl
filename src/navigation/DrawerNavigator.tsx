@@ -3,6 +3,7 @@ import { createDrawerNavigator, DrawerContentComponentProps } from '@react-navig
 import { StyleSheet, View, Text, TouchableOpacity, Image, SafeAreaView } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useNavigation } from '@react-navigation/native'; // Import useNavigation
 import { useAuth } from '../context/AuthContext';
 
 // Import ONLY Home screen here
@@ -10,37 +11,62 @@ import { HomescreenLight } from '../screens/Caartl/homescreen';
 
 const Drawer = createDrawerNavigator();
 
-// --- 1. Define Placeholder Components Outside ---
-const MyBookingsScreen = () => (
-    <View style={styles.placeholderContainer}>
-        <Text style={styles.placeholderTitle}>My Bookings</Text>
-        <Text style={styles.placeholderSubtitle}>Coming Soon</Text>
-    </View>
-);
+// --- 1. Define Placeholder Components with Back Buttons ---
 
-const PaymentsScreen = () => (
-    <View style={styles.placeholderContainer}>
-        <Text style={styles.placeholderTitle}>Payment Receipts</Text>
-        <Text style={styles.placeholderSubtitle}>Coming Soon</Text>
-    </View>
-);
+const MyBookingsScreen = () => {
+    const navigation = useNavigation();
+    return (
+        <View style={styles.placeholderContainer}>
+            <TouchableOpacity
+                style={styles.backButton}
+                onPress={() => navigation.goBack()}
+            >
+                <Feather name="arrow-left" size={24} color="#fff" />
+            </TouchableOpacity>
+            <Text style={styles.placeholderTitle}>My Bookings</Text>
+            <Text style={styles.placeholderSubtitle}>Coming Soon</Text>
+        </View>
+    );
+};
 
-const NegotiationsScreen = () => (
-    <View style={styles.placeholderContainer}>
-        <Text style={styles.placeholderTitle}>Negotiations</Text>
-        <Text style={styles.placeholderSubtitle}>Coming Soon</Text>
-    </View>
-);
+const PaymentsScreen = () => {
+    const navigation = useNavigation();
+    return (
+        <View style={styles.placeholderContainer}>
+            <TouchableOpacity
+                style={styles.backButton}
+                onPress={() => navigation.goBack()}
+            >
+                <Feather name="arrow-left" size={24} color="#fff" />
+            </TouchableOpacity>
+            <Text style={styles.placeholderTitle}>Payment Receipts</Text>
+            <Text style={styles.placeholderSubtitle}>Coming Soon</Text>
+        </View>
+    );
+};
+
+const NegotiationsScreen = () => {
+    const navigation = useNavigation();
+    return (
+        <View style={styles.placeholderContainer}>
+            <TouchableOpacity
+                style={styles.backButton}
+                onPress={() => navigation.goBack()}
+            >
+                <Feather name="arrow-left" size={24} color="#fff" />
+            </TouchableOpacity>
+            <Text style={styles.placeholderTitle}>Negotiations</Text>
+            <Text style={styles.placeholderSubtitle}>Coming Soon</Text>
+        </View>
+    );
+};
 
 // --- 2. Custom Drawer Content ---
 const CustomDrawerContent = (props: DrawerContentComponentProps) => {
     const { user, logout } = useAuth();
 
-    // 1. Only keep "extra" items in the drawer menu
-    // 2. Fixed Icons: 'car' is not in Feather, using 'truck' or switching library.
-    //    Let's stick to Feather for consistency where possible, or use conditional rendering.
     const drawerItems = [
-        { label: 'My Bookings', icon: 'bookmark', screen: 'MyBookings' }, // Changed 'car' to 'bookmark'
+        { label: 'My Bookings', icon: 'bookmark', screen: 'MyBookings' },
         { label: 'Payment Receipts', icon: 'file-text', screen: 'Payments' },
         { label: 'Negotiations', icon: 'briefcase', screen: 'Negotiations' },
     ];
@@ -106,7 +132,7 @@ export const DrawerNavigator = () => {
             {/* The Drawer WRAPS the Home Screen only */}
             <Drawer.Screen name="HomeTab" component={HomescreenLight} />
 
-            {/* Drawer-only screens - Now passing components directly, not inline functions */}
+            {/* Drawer-only screens */}
             <Drawer.Screen name="MyBookings" component={MyBookingsScreen} />
             <Drawer.Screen name="Payments" component={PaymentsScreen} />
             <Drawer.Screen name="Negotiations" component={NegotiationsScreen} />
@@ -154,7 +180,28 @@ const styles = StyleSheet.create({
     versionText: { color: '#444', fontSize: 12, fontFamily: 'Poppins', textAlign: 'center' },
 
     // Placeholder Screen Styles
-    placeholderContainer: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
+    placeholderContainer: {
+        flex: 1,
+        backgroundColor: '#000',
+        justifyContent: 'center',
+        alignItems: 'center',
+        // Added relative position to allow absolute positioning of the back button
+        position: 'relative'
+    },
     placeholderTitle: { color: '#fff', fontSize: 20, fontFamily: 'Poppins' },
     placeholderSubtitle: { color: '#666', marginTop: 10 },
+
+    // New Style for Back Button
+    backButton: {
+        position: 'absolute',
+        top: 60, // Adjusts for Status Bar
+        left: 24,
+        zIndex: 10,
+        width: 40,
+        height: 40,
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        borderRadius: 20,
+        justifyContent: 'center',
+        alignItems: 'center',
+    }
 });

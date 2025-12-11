@@ -207,15 +207,6 @@ export const CarDetailPage: React.FC = () => {
       >
         {/* --- Top Section --- */}
         <View>
-          <View style={styles.mainImageContainer}>
-            <TouchableOpacity onPress={() => setPreviewImage(mainImageUri)} activeOpacity={0.9}>
-              <Image source={{ uri: mainImageUri }} style={styles.carImageMain} resizeMode="cover" />
-            </TouchableOpacity>
-            <View style={styles.priceOverlay}>
-              <Text style={styles.priceLabel}>Starting Bid</Text>
-              <Text style={styles.priceText}>AED {Number(vehicle.starting_bid_amount).toLocaleString()}</Text>
-            </View>
-          </View>
 
           {imageList.length > 1 && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10, paddingLeft: 16 }}>
