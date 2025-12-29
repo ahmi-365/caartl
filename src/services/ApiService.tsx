@@ -1,3 +1,5 @@
+// src/services/ApiService.ts
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Models from '../data/modal';
 
@@ -38,7 +40,6 @@ class ApiService {
     const defaultOptions: RequestInit = {
       headers: {
         'Content-Type': 'application/json',
-        // Add Accept header to encourage JSON response
         'Accept': 'application/json',
         ...(token && { Authorization: `Bearer ${token}` }),
       },
@@ -53,14 +54,12 @@ class ApiService {
     try {
       const response = await fetch(url, finalOptions);
 
-      // Handle non-OK responses (like 401 Unauthorized)
       if (!response.ok) {
         if (response.status === 401) {
           return { success: false, status: 401, data: { message: 'Unauthorized' } as any };
         }
       }
 
-      // Attempt to parse JSON. If the server returns HTML (error page), this throws.
       const data = await response.json();
       return { success: response.ok, status: response.status, data };
     } catch (error) {
@@ -73,13 +72,19 @@ class ApiService {
     }
   }
 
+  // ... (Existing methods: getLocations, getServices, getVehicleDetails, Auth APIs, Favorites APIs) ...
+
+  async getLocations(): Promise<Models.ApiResult<{ data: Models.ServiceLocation[] }>> {
+    return this.apiCall('/services-locations?type=location');
+  }
+
+  async getServices(): Promise<Models.ApiResult<{ data: Models.ServiceLocation[] }>> {
+    return this.apiCall('/services-locations?type=service');
+  }
 
   async getVehicleDetails(id: number): Promise<Models.ApiResult<{ status: string, data: Models.Vehicle }>> {
     return this.apiCall(`/admin/vehicles/show/${id}`);
   }
-  // ===================================
-  // AUTH & USER APIs
-  // ===================================
 
   async register(userData: any): Promise<Models.ApiResult<Models.RegisterResponse>> {
     return this.apiCall('/register', { method: 'POST', body: JSON.stringify(userData) });
@@ -105,10 +110,6 @@ class ApiService {
     return this.apiCall('/user/profile/change-password', { method: 'POST', body: JSON.stringify(payload) });
   }
 
-  // ===================================
-  // FAVORITES APIs
-  // ===================================
-
   async toggleFavorite(vehicleId: number): Promise<Models.ApiResult<Models.ToggleFavoriteResponse>> {
     return this.apiCall('/favorites/toggle', { method: 'POST', body: JSON.stringify({ vehicle_id: vehicleId }) });
   }
@@ -128,15 +129,30 @@ class ApiService {
   ): Promise<Models.ApiResult<Models.ApiResponse<Models.PaginatedResponse<Models.Vehicle>>>> {
 
     let query = `/auctions?per_page=${perPage}&page=${page}`;
-
     if (filters.search) query += `&search=${encodeURIComponent(filters.search)}`;
-
     if (filters.make) query += `&make=${encodeURIComponent(filters.make)}`;
     else if (filters.make_id) query += `&make_id=${filters.make_id}`;
-
     if (filters.model) query += `&model=${encodeURIComponent(filters.model)}`;
     else if (filters.vehicle_model_id) query += `&vehicle_model_id=${filters.vehicle_model_id}`;
+    if (filters.year) query += `&year=${filters.year}`;
+    if (filters.condition) query += `&condition=${filters.condition}`;
+    if (filters.min_price) query += `&min_price=${filters.min_price}`;
+    if (filters.max_price) query += `&max_price=${filters.max_price}`;
 
+    return this.apiCall(query);
+  }
+
+  // 🟢 NEW METHOD FOR LISTED VEHICLES
+  async getListedVehicles(
+    page: number = 1,
+    filters: AuctionFilters = {}
+  ): Promise<Models.ApiResult<Models.ApiResponse<Models.PaginatedResponse<Models.Vehicle>>>> {
+
+    let query = `/auctions/listed?page=${page}`; // Using standard laravel pagination
+
+    if (filters.search) query += `&search=${encodeURIComponent(filters.search)}`;
+    if (filters.make_id) query += `&make_id=${filters.make_id}`;
+    if (filters.vehicle_model_id) query += `&vehicle_model_id=${filters.vehicle_model_id}`;
     if (filters.year) query += `&year=${filters.year}`;
     if (filters.condition) query += `&condition=${filters.condition}`;
     if (filters.min_price) query += `&min_price=${filters.min_price}`;
@@ -149,16 +165,18 @@ class ApiService {
     return this.apiCall(`/auctions/show/${id}`);
   }
 
-  // ===================================
-  // INSPECTION API
-  // ===================================
   async getInspectionReport(inspectionId: number): Promise<Models.ApiResult<Models.InspectionResponse>> {
     return this.apiCall(`/admin/inspection-reports/show/${inspectionId}`);
   }
 
-  // ===================================
-  // BIDDING APIs
-  // ===================================
+  async getAcceptedBids(): Promise<Models.ApiResult<{ status: string, data: Models.Bid[] }>> {
+    return this.apiCall('/user/biddings?status=accepted');
+  }
+
+  async getUserBiddingHistory(vehicleId: number): Promise<Models.ApiResult<{ status: string, data: Models.Bid[] }>> {
+    return this.apiCall(`/user/biddings?vehicle_id=${vehicleId}`);
+  }
+
   async getBiddingInfo(auctionId: number): Promise<Models.ApiResult<Models.BiddingInfoResponse>> {
     return this.apiCall(`/biddings/${auctionId}`);
   }
@@ -171,16 +189,24 @@ class ApiService {
     return this.apiCall(`/bid-history/${auctionId}`);
   }
 
-  // ===================================
-  // BOOKING API
-  // ===================================
+  async getMyBookings(page = 1): Promise<Models.ApiResult<Models.ApiResponse<Models.PaginatedResponse<Models.Booking>>>> {
+    return this.apiCall(`/get-bookings?page=${page}`);
+  }
+
+  async getBookingByVehicle(vehicleId: number): Promise<Models.ApiResult<any>> {
+    return this.apiCall(`/get-bookings?vehicle_id=${vehicleId}`);
+  }
+
   async bookNow(bookingData: FormData): Promise<Models.ApiResult<any>> {
     const url = `${this.baseURL}/bookings/book-now`;
     const token = await this.getToken();
     try {
       const response = await fetch(url, {
         method: 'POST',
-        headers: { ...(token && { Authorization: `Bearer ${token}` }) },
+        headers: {
+          'Accept': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
         body: bookingData,
       });
       const data = await response.json();
@@ -191,9 +217,6 @@ class ApiService {
     }
   }
 
-  // ===================================
-  // FILTER DATA & PACKAGES
-  // ===================================
   async getPackages(): Promise<Models.ApiResult<Models.ApiResponse<Models.PaginatedResponse<Models.Package>>>> {
     return this.apiCall('/admin/packages');
   }
@@ -211,10 +234,6 @@ class ApiService {
   async getYears() {
     return this.apiCall<{ status: string, data: number[] }>('/years');
   }
-
-  // ===================================
-  // STORAGE HELPERS
-  // ===================================
 
   async storeUserData(user: Models.User, token: string) {
     try {

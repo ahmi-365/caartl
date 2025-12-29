@@ -32,13 +32,15 @@ export const BottomNav = () => {
 
   const goHome = () => {
     setActive('home');
-    navigation.navigate('DrawerRoot');
+    // 🟢 FIX: Explicitly navigate to 'HomeTab' inside 'DrawerRoot'
+    // @ts-ignore
+    navigation.navigate('DrawerRoot', { screen: 'HomeTab' });
   };
 
   const goBooking = () => {
     setActive('booking');
     // @ts-ignore
-    navigation.navigate('MyBookings');
+    navigation.navigate('DrawerRoot', { screen: 'MyBookings' });
   };
 
   const goFavorites = () => {
@@ -136,7 +138,7 @@ const styles = StyleSheet.create({
     right: 0,
     height: 120,
     justifyContent: 'flex-end',
-    paddingBottom: 20,
+
   },
   bottomNav: {
     marginHorizontal: 24,

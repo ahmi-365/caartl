@@ -171,7 +171,7 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scrollView: { flex: 1, paddingTop: 50 },
+  scrollView: { flex: 1, paddingTop: 20 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, marginBottom: 30 },
   headerTitle: { fontSize: 20, fontWeight: '600', color: '#fff', fontFamily: 'Poppins' },
 

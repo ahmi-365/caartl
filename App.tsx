@@ -5,7 +5,11 @@ import { AuthProvider } from "./src/context/AuthContext";
 import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
 import { AlertProvider } from "./src/context/AlertContext";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useEffect } from "react";
+import { Platform } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
+import * as NavigationBar from 'expo-navigation-bar';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -15,10 +19,20 @@ export default function App() {
   });
 
   useEffect(() => {
+    const prepare = async () => {
+      if (Platform.OS === 'android') {
+        // Set bar to black and visible
+        await NavigationBar.setBackgroundColorAsync("#000000");
+        await NavigationBar.setButtonStyleAsync("light");
+        await NavigationBar.setVisibilityAsync("visible"); // Ensure it's visible
+      }
 
-    if (fontsLoaded) {
-      SplashScreen.hideAsync();
-    }
+      if (fontsLoaded) {
+        await SplashScreen.hideAsync();
+      }
+    };
+
+    prepare();
   }, [fontsLoaded]);
 
   if (!fontsLoaded) {
@@ -26,13 +40,17 @@ export default function App() {
   }
 
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <AlertProvider>
-          <AppNavigator />
-          <StatusBar style="auto" />
-        </AlertProvider>
-      </AuthProvider>
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#000' }}>
+      <SafeAreaProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <AlertProvider>
+              <AppNavigator />
+              <StatusBar style="light" backgroundColor="#000000" />
+            </AlertProvider>
+          </AuthProvider>
+        </ThemeProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

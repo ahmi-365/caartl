@@ -13,6 +13,7 @@ import {
   NativeScrollEvent,
   NativeSyntheticEvent,
   Modal,
+  Linking, // Added for PDF
 } from 'react-native';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -25,6 +26,7 @@ type CarDetailRouteProp = RouteProp<RootStackParamList, 'CarDetailPage'>;
 
 const { width, height } = Dimensions.get('window');
 const TAB_BAR_HEIGHT = 60;
+const STORAGE_BASE_URL = 'https://api.caartl.com/storage/';
 
 // Image Preview Modal Component
 const ImagePreviewModal = ({ visible, imageUrl, onClose }: { visible: boolean, imageUrl: string, onClose: () => void }) => (
@@ -45,7 +47,9 @@ export const CarDetailPage: React.FC = () => {
 
   const [loading, setLoading] = useState(true);
   const [auctionData, setAuctionData] = useState<Models.AuctionDetailsResponse['data'] | null>(null);
-  const [inspectionData, setInspectionData] = useState<Models.InspectionReport | null>(null);
+
+  // Stores the latest inspection found inside the vehicle object
+  const [inspectionData, setInspectionData] = useState<any | null>(null);
 
   const [activeTab, setActiveTab] = useState('Details');
   const [showAllFeatures, setShowAllFeatures] = useState(false);
@@ -56,42 +60,23 @@ export const CarDetailPage: React.FC = () => {
   const isManualScroll = useRef(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Added 'Inspection' to tabs
   const tabs = ['Details', 'Features', 'Inspection', 'Exterior', 'Comments'];
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // 1. Fetch Auction Details (Basic info)
-        const auctionResult = await apiService.getAuctionDetails(carId);
+        // 1. Fetch Auction Details (ONLY this API call)
+        const result = await apiService.getAuctionDetails(carId);
 
-        if (auctionResult.success && auctionResult.data.data) {
-          setAuctionData(auctionResult.data.data);
+        if (result.success && result.data.data) {
+          const data = result.data.data;
+          setAuctionData(data);
 
-          let inspectionId = null;
-
-          // Check if inspections are in the auction response
-          if (auctionResult.data.data.vehicle.inspections && auctionResult.data.data.vehicle.inspections.length > 0) {
-            inspectionId = auctionResult.data.data.vehicle.inspections[auctionResult.data.data.vehicle.inspections.length - 1].id;
-          }
-          else {
-            // 2. Fallback: Fetch from Admin/Vehicle endpoint to find inspections
-            try {
-              const vehicleResult = await apiService.getVehicleDetails(carId);
-              if (vehicleResult.success && vehicleResult.data.data && vehicleResult.data.data.inspections && vehicleResult.data.data.inspections.length > 0) {
-                inspectionId = vehicleResult.data.data.inspections[vehicleResult.data.data.inspections.length - 1].id;
-              }
-            } catch (e) {
-              console.log("Failed to fetch admin vehicle details", e);
-            }
-          }
-
-          // 3. If we found an ID, fetch the report
-          if (inspectionId) {
-            const inspectionResult = await apiService.getInspectionReport(inspectionId);
-            if (inspectionResult.success) {
-              setInspectionData(inspectionResult.data.data);
-            }
+          // 2. Extract Inspection Data DIRECTLY from the response
+          // We take the LAST item in the inspections array as the latest report
+          if (data.vehicle.inspections && data.vehicle.inspections.length > 0) {
+            const latest = data.vehicle.inspections[data.vehicle.inspections.length - 1];
+            setInspectionData(latest);
           }
         }
       } catch (error) {
@@ -136,6 +121,25 @@ export const CarDetailPage: React.FC = () => {
     if (newActiveTab !== activeTab) setActiveTab(newActiveTab);
   };
 
+  // Helper to open PDF
+  const openPdfReport = () => {
+    if (inspectionData?.file_path) {
+      // Construct full URL. Ensure no double slashes if path has leading slash
+      const path = inspectionData.file_path.startsWith('/') ? inspectionData.file_path.substring(1) : inspectionData.file_path;
+
+      // If the path is already a full URL, use it, otherwise append base
+      const url = path.startsWith('http') ? path : `${STORAGE_BASE_URL}${path}`;
+
+      Linking.canOpenURL(url).then(supported => {
+        if (supported) {
+          Linking.openURL(url);
+        } else {
+          console.log("Cannot open URL: " + url);
+        }
+      });
+    }
+  };
+
   if (loading) return <View style={styles.loadingCenter}><ActivityIndicator size="large" color="#cadb2a" /></View>;
   if (!auctionData?.vehicle) return null;
 
@@ -145,7 +149,7 @@ export const CarDetailPage: React.FC = () => {
   const getImageUrl = (img: string | Models.VehicleImage | null | undefined): string | null => {
     if (!img) return null;
     if (typeof img === 'string') return img;
-    return img.path; // It's a VehicleImage object
+    return img.path;
   };
 
   let imageList: string[] = [];
@@ -163,7 +167,6 @@ export const CarDetailPage: React.FC = () => {
   const mainImageUri = imageList[0];
   const thumbImages = imageList.length > 1 ? imageList.slice(0, 3) : [];
 
-  // Features
   const allFeatures = [...(all_exterior_features || []), ...(all_interior_features || [])];
   const displayedFeatures = showAllFeatures ? allFeatures : allFeatures.slice(0, 8);
 
@@ -207,6 +210,15 @@ export const CarDetailPage: React.FC = () => {
       >
         {/* --- Top Section --- */}
         <View>
+          <View style={styles.mainImageContainer}>
+            <TouchableOpacity onPress={() => setPreviewImage(mainImageUri)} activeOpacity={0.9}>
+              <Image source={{ uri: mainImageUri }} style={styles.carImageMain} resizeMode="cover" />
+            </TouchableOpacity>
+            <View style={styles.priceOverlay}>
+              <Text style={styles.priceLabel}>Starting Bid</Text>
+              <Text style={styles.priceText}>AED {Number(vehicle.starting_bid_amount).toLocaleString()}</Text>
+            </View>
+          </View>
 
           {imageList.length > 1 && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10, paddingLeft: 16 }}>
@@ -252,7 +264,7 @@ export const CarDetailPage: React.FC = () => {
                 <MaterialCommunityIcons name={item.icon as any} size={18} color="#888" style={{ marginRight: 10 }} />
                 <Text style={styles.detailLabel}>{item.label}</Text>
               </View>
-              <Text style={styles.detailValue}>{item.val}</Text>
+              <Text style={styles.detailVal}>{item.val}</Text>
             </View>
           ))}
         </View>
@@ -279,16 +291,24 @@ export const CarDetailPage: React.FC = () => {
           )}
         </View>
 
-        {/* --- INSPECTION SECTION (New) --- */}
+        {/* --- INSPECTION SECTION (Data from inspections array) --- */}
         <View onLayout={(e) => onLayoutSection(e, 'Inspection')} style={styles.section}>
           <Text style={styles.sectionTitle}>Inspection Report</Text>
 
           {inspectionData ? (
             <>
-              {/* Damage Map Image */}
+              {/* 1. PDF Report Button */}
+              {inspectionData.file_path && (
+                <TouchableOpacity style={styles.pdfButton} onPress={openPdfReport}>
+                  <MaterialCommunityIcons name="file-pdf-box" size={24} color="#000" />
+                  <Text style={styles.pdfButtonText}>View Full Report (PDF)</Text>
+                </TouchableOpacity>
+              )}
+
+              {/* 2. Damage Map Image */}
               {inspectionData.damage_file_path && (
                 <View style={styles.damageMapContainer}>
-                  <Text style={[styles.detailLabel, { marginBottom: 10 }]}>Damage Assessment Map</Text>
+                  <Text style={[styles.detailLabel, { marginBottom: 10, color: '#000', fontWeight: 'bold' }]}>Damage Assessment Map</Text>
                   <TouchableOpacity onPress={() => setPreviewImage(inspectionData.damage_file_path || '')}>
                     <Image
                       source={{ uri: inspectionData.damage_file_path }}
@@ -299,12 +319,12 @@ export const CarDetailPage: React.FC = () => {
                 </View>
               )}
 
-              {/* Paint Condition */}
+              {/* 3. Paint Condition */}
               {inspectionData.paintCondition && inspectionData.paintCondition.length > 0 && (
                 <View style={styles.infoBlock}>
                   <Text style={styles.infoLabel}>Paint Condition</Text>
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5 }}>
-                    {inspectionData.paintCondition.map((pc, i) => (
+                    {inspectionData.paintCondition.map((pc: string, i: number) => (
                       <View key={i} style={styles.tag}>
                         <Text style={styles.tagText}>{pc}</Text>
                       </View>
@@ -313,12 +333,12 @@ export const CarDetailPage: React.FC = () => {
                 </View>
               )}
 
-              {/* Detailed Inspection Grid */}
+              {/* 4. Detailed Inspection Grid */}
               <View style={styles.inspectionGrid}>
                 {[
                   { label: 'Engine', value: inspectionData.engineCondition },
-                  { label: 'Gear', value: inspectionData.transmissionCondition },
-                  { label: 'AC', value: inspectionData.acCooling },
+                  { label: 'Gearbox', value: inspectionData.transmissionCondition },
+                  { label: 'AC Cooling', value: inspectionData.acCooling },
                   { label: 'Suspension', value: inspectionData.suspension },
                   { label: 'Steering', value: inspectionData.steeringOperation },
                   { label: 'Oil Leak', value: inspectionData.engineOil },
@@ -326,36 +346,50 @@ export const CarDetailPage: React.FC = () => {
                   item.value ? (
                     <View key={idx} style={styles.inspectionItem}>
                       <Text style={styles.inspectionLabel}>{item.label}</Text>
-                      <Text style={styles.inspectionValue}>{item.value}</Text>
+                      <Text style={styles.inspectionValue} numberOfLines={1}>{item.value}</Text>
                     </View>
                   ) : null
                 ))}
               </View>
 
-              {/* Damages List */}
-              {inspectionData.damages && inspectionData.damages.length > 0 && (
-                <View style={{ marginTop: 15 }}>
-                  <Text style={[styles.sectionTitle, { fontSize: 14 }]}>Reported Damages</Text>
-                  {inspectionData.damages.map((dmg, idx) => (
+              {/* 5. Reported Damages List (If available) */}
+              {inspectionData.damages && inspectionData.damages.length > 0 ? (
+                <View style={{ marginTop: 20 }}>
+                  <Text style={[styles.sectionTitle, { fontSize: 14, color: '#fff' }]}>Reported Damages</Text>
+                  {inspectionData.damages.map((dmg: any, idx: number) => (
                     <View key={idx} style={styles.damageRow}>
-                      <Feather name="alert-circle" size={16} color="#ff4444" />
-                      <Text style={styles.damageText}>
-                        {dmg.body_part}: {dmg.type} ({dmg.severity})
-                      </Text>
+                      <Feather name="alert-triangle" size={16} color="#ff4444" />
+                      <View style={{ marginLeft: 10, flex: 1 }}>
+                        <Text style={styles.damageTitle}>{dmg.body_part} - {dmg.type}</Text>
+                        <Text style={styles.damageSub}>Severity: {dmg.severity}</Text>
+                      </View>
                     </View>
                   ))}
+                </View>
+              ) : (
+                <View style={{ marginTop: 15, flexDirection: 'row', alignItems: 'center' }}>
+                  <Feather name="check-circle" size={16} color="#cadb2a" />
+                  <Text style={{ color: '#ccc', marginLeft: 8, fontFamily: 'Poppins' }}>No specific damages listed.</Text>
                 </View>
               )}
             </>
           ) : (
-            <Text style={styles.descriptionText}>No inspection report available.</Text>
+            <View style={styles.noReportBox}>
+              <Feather name="file-text" size={24} color="#555" />
+              <Text style={styles.descriptionText}>No inspection report available yet.</Text>
+            </View>
           )}
         </View>
 
         {/* --- Exterior Section --- */}
         <View onLayout={(e) => onLayoutSection(e, 'Exterior')} style={styles.section}>
-          <Text style={styles.sectionTitle}>Description</Text>
-          <Text style={styles.descriptionText}>{vehicle.description || "No description provided."}</Text>
+          <Text style={styles.sectionTitle}>Exterior</Text>
+          <Image
+            source={{ uri: mainImageUri }}
+            style={{ width: '100%', height: 200, borderRadius: 12, marginTop: 10 }}
+            resizeMode="contain"
+          />
+          <Text style={[styles.descriptionText, { marginTop: 10 }]}>{vehicle.description || "No additional description provided."}</Text>
         </View>
 
         {/* --- Comments Section --- */}
@@ -408,7 +442,7 @@ const styles = StyleSheet.create({
 
   detailRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#222' },
   detailLabel: { color: '#fff', fontSize: 14, fontFamily: 'Poppins' },
-  detailValue: { color: '#fff', fontSize: 14, fontWeight: 'bold', fontFamily: 'Poppins' },
+  detailVal: { color: '#fff', fontSize: 14, fontWeight: 'bold', fontFamily: 'Poppins' },
 
   featureHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   badgeIcon: { backgroundColor: '#cadb2a', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
@@ -422,20 +456,26 @@ const styles = StyleSheet.create({
   commentBox: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: '#111', padding: 16, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: '#222' },
 
   // Inspection Styles
+  pdfButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#cadb2a', borderRadius: 12, padding: 15, marginBottom: 20 },
+  pdfButtonText: { color: '#000', fontWeight: 'bold', fontSize: 16, marginLeft: 10, fontFamily: 'Poppins' },
+
   damageMapContainer: { backgroundColor: '#fff', borderRadius: 12, padding: 10, marginBottom: 15 },
   damageMapImage: { width: '100%', height: 200 },
   infoBlock: { marginBottom: 15 },
-  infoLabel: { color: '#ccc', fontSize: 12, marginBottom: 5 },
-  tag: { backgroundColor: '#333', borderRadius: 4, paddingHorizontal: 8, paddingVertical: 4 },
-  tagText: { color: '#fff', fontSize: 12 },
+  infoLabel: { color: '#ccc', fontSize: 12, marginBottom: 5, fontFamily: 'Poppins' },
+  tag: { backgroundColor: '#333', borderRadius: 4, paddingHorizontal: 8, paddingVertical: 4, marginRight: 5, marginBottom: 5 },
+  tagText: { color: '#fff', fontSize: 12, fontFamily: 'Poppins' },
 
   inspectionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   inspectionItem: { width: '48%', backgroundColor: '#111', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#222' },
-  inspectionLabel: { color: '#888', fontSize: 12 },
-  inspectionValue: { color: '#cadb2a', fontSize: 14, fontWeight: 'bold' },
+  inspectionLabel: { color: '#888', fontSize: 12, fontFamily: 'Poppins' },
+  inspectionValue: { color: '#cadb2a', fontSize: 14, fontWeight: 'bold', fontFamily: 'Poppins', marginTop: 2 },
 
-  damageRow: { flexDirection: 'row', alignItems: 'center', marginTop: 5 },
-  damageText: { color: '#fff', fontSize: 13, marginLeft: 8 },
+  damageRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8, backgroundColor: '#111', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#333' },
+  damageTitle: { color: '#fff', fontSize: 14, fontWeight: '600', fontFamily: 'Poppins' },
+  damageSub: { color: '#888', fontSize: 12, fontFamily: 'Poppins' },
+
+  noReportBox: { alignItems: 'center', padding: 20, backgroundColor: '#111', borderRadius: 12, borderWidth: 1, borderColor: '#222' },
 
   // Preview
   previewContainer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center' },

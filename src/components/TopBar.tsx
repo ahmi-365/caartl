@@ -20,9 +20,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onMenuPress, onNotificationPress
           </Svg>
         </TouchableOpacity>
       ) : (
-        // Render an empty view of same size to keep logo centered if needed,
-        // or nothing if you want logo left-aligned.
-        // Here I'm keeping it to maintain spacing if your design relies on space-between
+        // Render an empty view of same size to keep logo centered if needed
         <View style={{ width: 42 }} />
       )}
 
@@ -43,8 +41,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 25.5,
-    paddingTop: 60,
-    paddingBottom: 16,
+    // Reduced padding values to decrease height
+    paddingTop: 10,    // Was 20
+    paddingBottom: 10, // Was 16
     position: 'absolute',
     top: 0,
     left: 0,

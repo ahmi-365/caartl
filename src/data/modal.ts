@@ -1,4 +1,4 @@
-// models.ts
+// src/data/models.ts
 
 // ===================================
 // CORE & SHARED MODELS
@@ -20,6 +20,19 @@ export interface Feature {
     name: string;
 }
 
+// 🟢 UPDATED: Added service_type and paid_check
+export interface ServiceLocation {
+    id: number;
+    service_name: string | null;
+    service_amount: string | null;
+    location: string | null;
+    type: 'service' | 'location';
+    created_at: string;
+    updated_at: string;
+    service_type?: string | null; // Fixed Fees vs Value Added
+    paid_check?: string | null;   // 1 = Free/Discounted
+}
+
 export interface User {
     id: number;
     agent_id: number | null;
@@ -39,6 +52,41 @@ export interface User {
     package_id?: number | null;
 }
 
+// ===================================
+// INSPECTION MODELS
+// ===================================
+
+export interface Damage {
+    id: number;
+    type: string;
+    body_part: string;
+    severity: string;
+    remark: string | null;
+    x: number;
+    y: number;
+}
+
+export interface InspectionReport {
+    id: number;
+    vehicle_id: number;
+    inspected_at: string;
+    damage_file_path: string | null;
+    file_path: string | null;
+    engineCondition: string | null;
+    transmissionCondition: string | null;
+    acCooling: string | null;
+    suspension: string | null;
+    paintCondition: string[] | null;
+    engineOil: string | null;
+    steeringOperation: string | null;
+    damages: Damage[];
+    [key: string]: any;
+}
+
+export interface InspectionResponse {
+    status: string;
+    data: InspectionReport;
+}
 
 // ===================================
 // AUCTION & VEHICLE MODELS
@@ -120,13 +168,22 @@ export interface Vehicle {
         created_at: string;
         updated_at: string;
     };
-    // If you implemented Inspections:
-    inspections?: { id: number; created_at: string }[];
+    inspections?: InspectionReport[];
 }
 
 // ===================================
 // BIDDING & PACKAGES
 // ===================================
+
+export interface Booking {
+    id: number;
+    vehicle_id: number;
+    user_id: number;
+    total_amount: string;
+    status: 'pending_payment' | 'intransfer' | 'completed' | 'cancelled' | string;
+    created_at: string;
+    vehicle: Vehicle;
+}
 
 export interface Bid {
     id: number;
@@ -134,7 +191,7 @@ export interface Bid {
     user_id: number;
     bid_amount: number;
     bid_time: string;
-    status: 'pending' | string;
+    status: 'pending' | 'accepted' | 'rejected' | string;
     created_at: string;
     updated_at: string;
     current_bid: number | null;
@@ -143,6 +200,7 @@ export interface Bid {
         id: number;
         name: string;
     };
+    vehicle?: Vehicle;
 }
 
 export interface Package {
@@ -212,6 +270,7 @@ export interface AuctionDetailsResponse {
         interior_features: Feature[];
         all_exterior_features: Feature[];
         all_interior_features: Feature[];
+        inspections: InspectionReport[];
     };
 }
 
@@ -238,39 +297,6 @@ export interface PlaceBidResponse {
         created_at: string;
         updated_at: string;
     };
-}
-
-// [NEW] Inspection Response Wrappers
-export interface Damage {
-    id: number;
-    type: string;
-    body_part: string;
-    severity: string;
-    remark: string | null;
-    x: number;
-    y: number;
-}
-
-export interface InspectionReport {
-    id: number;
-    vehicle_id: number;
-    inspected_at: string;
-    damage_file_path: string | null;
-    file_path: string | null;
-    engineCondition: string | null;
-    transmissionCondition: string | null;
-    acCooling: string | null;
-    suspension: string | null;
-    paintCondition: string[] | null;
-    engineOil: string | null;
-    steeringOperation: string | null;
-    damages: Damage[];
-    [key: string]: any;
-}
-
-export interface InspectionResponse {
-    status: string;
-    data: InspectionReport;
 }
 
 // ===================================
