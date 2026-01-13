@@ -1,86 +1,268 @@
-import { LinearGradient } from 'expo-linear-gradient';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
-  Image,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
   View,
-  ActivityIndicator,
+  Text,
+  StyleSheet,
+  ScrollView,
   Dimensions,
-  LayoutChangeEvent,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
+  Image,
+  TouchableOpacity,
+  ActivityIndicator,
   Modal,
-  Linking, // Added for PDF
+  LayoutChangeEvent,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
+  Linking,
 } from 'react-native';
-import Svg, { Path, Circle } from 'react-native-svg';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Feather, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+} from "react-native-reanimated";
+import {
+  Gesture,
+  GestureDetector,
+  GestureHandlerRootView,
+  Pressable,
+} from "react-native-gesture-handler";
+import { Video, ResizeMode } from 'expo-av';
+
+import { RootStackParamList } from '../navigation/AppNavigator';
 import apiService from '../services/ApiService';
 import * as Models from '../data/modal';
-import { RootStackParamList } from '../navigation/AppNavigator';
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useAlert } from '../context/AlertContext';
 
 type CarDetailRouteProp = RouteProp<RootStackParamList, 'CarDetailPage'>;
+type CarDetailNavigationProp = NativeStackNavigationProp<RootStackParamList, 'CarDetailPage'>;
 
 const { width, height } = Dimensions.get('window');
-const TAB_BAR_HEIGHT = 60;
 const STORAGE_BASE_URL = 'https://api.caartl.com/storage/';
+const TAB_BAR_HEIGHT = 60;
 
-// Image Preview Modal Component
-const ImagePreviewModal = ({ visible, imageUrl, onClose }: { visible: boolean, imageUrl: string, onClose: () => void }) => (
-  <Modal visible={visible} transparent={true} onRequestClose={onClose}>
-    <View style={styles.previewContainer}>
-      <TouchableOpacity style={styles.previewCloseBtn} onPress={onClose}>
-        <Feather name="x" size={30} color="#fff" />
-      </TouchableOpacity>
-      <Image source={{ uri: imageUrl }} style={styles.previewImage} resizeMode="contain" />
+// ==========================================
+// 1. SHARED UI COMPONENTS
+// ==========================================
+
+const ZoomableImage = ({ uri }: { uri: string }) => {
+  const scale = useSharedValue(1);
+  const savedScale = useSharedValue(1);
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  const savedTranslateX = useSharedValue(0);
+  const savedTranslateY = useSharedValue(0);
+
+  const pinchGesture = Gesture.Pinch()
+    .onUpdate((e) => {
+      scale.value = savedScale.value * e.scale;
+      if (scale.value < 1) scale.value = 1;
+      if (scale.value > 5) scale.value = 5;
+    })
+    .onEnd(() => {
+      savedScale.value = scale.value;
+    });
+
+  const panGesture = Gesture.Pan()
+    .onUpdate((e) => {
+      const maxTranslateX = (width * (scale.value - 1)) / 2;
+      const maxTranslateY = (height * 0.8 * (scale.value - 1)) / 2;
+      translateX.value = Math.min(Math.max(savedTranslateX.value + e.translationX, -maxTranslateX), maxTranslateX);
+      translateY.value = Math.min(Math.max(savedTranslateY.value + e.translationY, -maxTranslateY), maxTranslateY);
+    })
+    .onEnd(() => {
+      savedTranslateX.value = translateX.value;
+      savedTranslateY.value = translateY.value;
+    });
+
+  const doubleTapGesture = Gesture.Tap()
+    .numberOfTaps(2)
+    .onEnd(() => {
+      scale.value = withTiming(1);
+      translateX.value = withTiming(0);
+      translateY.value = withTiming(0);
+      savedScale.value = 1;
+      savedTranslateX.value = 0;
+      savedTranslateY.value = 0;
+    });
+
+  const composed = Gesture.Simultaneous(pinchGesture, panGesture, doubleTapGesture);
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+      { scale: scale.value },
+    ],
+  }));
+
+  return (
+    <GestureDetector gesture={composed}>
+      <Animated.View style={{ width, height: height * 0.8, justifyContent: 'center', alignItems: 'center' }}>
+        <Animated.Image
+          source={{ uri }}
+          style={[{ width: '100%', height: '100%', resizeMode: 'contain' }, animatedStyle]}
+        />
+      </Animated.View>
+    </GestureDetector>
+  );
+};
+
+const ImagePreviewModal = ({ visible, imageUrl, onClose, isWhiteBackground = false }: any) => (
+  <Modal visible={visible} transparent={true} onRequestClose={onClose} animationType="fade">
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <View style={[styles.previewContainer, isWhiteBackground && styles.previewContainerWhite]}>
+        <TouchableOpacity style={styles.previewCloseBtn} onPress={onClose} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
+          <Feather name="x" size={30} color={isWhiteBackground ? "#000" : "#fff"} />
+        </TouchableOpacity>
+        <ZoomableImage uri={imageUrl} />
+      </View>
+    </GestureHandlerRootView>
+  </Modal>
+);
+
+const VideoPlayerModal = ({ visible, videoUrl, onClose }: any) => (
+  <Modal visible={visible} transparent={true} onRequestClose={onClose} animationType="slide">
+    <View style={styles.videoModalContainer}>
+      <TouchableOpacity style={styles.videoCloseBtn} onPress={onClose}><Feather name="x" size={30} color="#fff" /></TouchableOpacity>
+      {videoUrl ? (
+        <Video
+          source={{ uri: videoUrl }}
+          rate={1.0}
+          volume={1.0}
+          isMuted={false}
+          resizeMode={ResizeMode.CONTAIN}
+          shouldPlay
+          useNativeControls
+          style={styles.fullscreenVideo}
+          onError={(e) => console.log("Video Error:", e)}
+        />
+      ) : (
+        <ActivityIndicator size="large" color="#cadb2a" />
+      )}
     </View>
   </Modal>
 );
 
-export const CarDetailPage: React.FC = () => {
-  const navigation = useNavigation();
+const SpecCard = ({ icon, title, sub }: { icon: any, title: string, sub: string | number }) => (
+  <View style={styles.specCard}>
+    <MaterialCommunityIcons name={icon} size={28} color="#cadb2a" style={{ marginBottom: 8 }} />
+    <Text style={styles.specTitle}>{title}</Text>
+    <Text style={styles.specSub}>{sub}</Text>
+  </View>
+);
+
+const formatKey = (key: string) => {
+  const result = key.replace(/([A-Z])/g, " $1");
+  return result.charAt(0).toUpperCase() + result.slice(1);
+};
+
+const InspectionAccordion = ({ title, children, isOpen, onPress }: any) => (
+  <View style={styles.accordionContainer}>
+    <TouchableOpacity style={styles.accordionHeader} onPress={onPress}>
+      <Text style={styles.accordionTitle}>{title}</Text>
+      <Feather name={isOpen ? "chevron-up" : "chevron-down"} size={20} color="#cadb2a" />
+    </TouchableOpacity>
+    {isOpen && <View style={styles.accordionContent}>{children}</View>}
+  </View>
+);
+
+const getPaintBadgeColor = (condition: string) => {
+  const parts = condition.split(':');
+  let colorName = '#333';
+  let label = condition;
+
+  if (parts.length > 1) {
+    const colorKey = parts[0].trim().toLowerCase();
+    label = parts[1].trim();
+
+    switch (colorKey) {
+      case 'red': colorName = '#ff4444'; break;
+      case 'blue': colorName = '#4488ff'; break;
+      case 'green': colorName = '#2ecc71'; break;
+      case 'orange': colorName = '#e67e22'; break;
+      case 'yellow': colorName = '#f1c40f'; break;
+      case 'pink': colorName = '#e91e63'; break;
+      case 'purple': colorName = '#9b59b6'; break;
+      default: colorName = '#555';
+    }
+  } else if (condition.toLowerCase().includes('original')) {
+    colorName = '#27ae60';
+  }
+
+  return { backgroundColor: colorName, label };
+};
+
+const getSeverityBorderColor = (severity: string) => {
+  const s = (severity || "").toLowerCase();
+  if (s.includes('minor')) return '#4488ff';
+  if (s.includes('moderate')) return '#e67e22';
+  if (s.includes('major') || s.includes('severe')) return '#ff4444';
+  return '#333';
+};
+
+// ==========================================
+// MAIN COMPONENT
+// ==========================================
+
+export const CarDetailPage = () => {
+  const navigation = useNavigation<CarDetailNavigationProp>();
   const route = useRoute<CarDetailRouteProp>();
   const { carId } = route.params;
 
+  const { showAlert } = useAlert();
   const [loading, setLoading] = useState(true);
-  const [auctionData, setAuctionData] = useState<Models.AuctionDetailsResponse['data'] | null>(null);
 
-  // Stores the latest inspection found inside the vehicle object
-  const [inspectionData, setInspectionData] = useState<any | null>(null);
+  const [fullData, setFullData] = useState<Models.AuctionDetailsResponse['data'] | null>(null);
+  const [bookingStatus, setBookingStatus] = useState<'none' | 'pending_payment' | 'intransfer' | 'delivered'>('none');
+  const [bookingData, setBookingData] = useState<any>(null);
+  const [damageTypes, setDamageTypes] = useState<any[]>([]);
 
-  const [activeTab, setActiveTab] = useState('Details');
+  // UI States
+  const [activeBannerIndex, setActiveBannerIndex] = useState(0);
+  const [activeInspectionIndex, setActiveInspectionIndex] = useState(0);
   const [showAllFeatures, setShowAllFeatures] = useState(false);
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [showAllDetails, setShowAllDetails] = useState(false);
+  const [expandedDamageCategories, setExpandedDamageCategories] = useState<{ [key: string]: boolean }>({});
+  const [activeAccordion, setActiveAccordion] = useState<string | null>('Engine');
+  const [activeTab, setActiveTab] = useState('Overview');
 
+  // Media
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [isPreviewMap, setIsPreviewMap] = useState(false);
+  const [videoModalVisible, setVideoModalVisible] = useState(false);
+  const [currentVideoUrl, setCurrentVideoUrl] = useState<string | null>(null);
+
+  // Scroll
   const scrollViewRef = useRef<ScrollView>(null);
   const sectionYCoords = useRef<{ [key: string]: number }>({});
   const isManualScroll = useRef(false);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const tabs = ['Details', 'Features', 'Inspection', 'Exterior', 'Comments'];
-
+  // --- Fetch Data ---
   useEffect(() => {
     const fetchData = async () => {
+      setLoading(true);
       try {
-        // 1. Fetch Auction Details (ONLY this API call)
-        const result = await apiService.getAuctionDetails(carId);
-
-        if (result.success && result.data.data) {
-          const data = result.data.data;
-          setAuctionData(data);
-
-          // 2. Extract Inspection Data DIRECTLY from the response
-          // We take the LAST item in the inspections array as the latest report
-          if (data.vehicle.inspections && data.vehicle.inspections.length > 0) {
-            const latest = data.vehicle.inspections[data.vehicle.inspections.length - 1];
-            setInspectionData(latest);
-          }
+        const detailsRes = await apiService.getAuctionDetails(carId);
+        if (detailsRes.success && detailsRes.data.data) {
+          setFullData(detailsRes.data.data);
         }
+
+        const bookRes = await apiService.getBookingByVehicle(carId);
+        if (bookRes.success && bookRes.data.data && bookRes.data.data.data.length > 0) {
+          const latestBooking = bookRes.data.data.data[0];
+          setBookingData(latestBooking);
+          setBookingStatus(latestBooking.status);
+        }
+
+        const dmgRes = await apiService.apiCall<any>('/admin/inspection-reports/damage-types');
+        if (dmgRes.success && Array.isArray(dmgRes.data.data)) {
+          setDamageTypes(dmgRes.data.data);
+        }
+
       } catch (error) {
-        console.error("Error fetching data:", error);
+        console.error("Fetch error:", error);
       } finally {
         setLoading(false);
       }
@@ -88,397 +270,648 @@ export const CarDetailPage: React.FC = () => {
     fetchData();
   }, [carId]);
 
-  const handleTabPress = (tabName: string) => {
-    setActiveTab(tabName);
-    isManualScroll.current = true;
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-
-    const y = sectionYCoords.current[tabName];
-    if (y !== undefined && scrollViewRef.current) {
-      scrollViewRef.current.scrollTo({ y: y - TAB_BAR_HEIGHT, animated: true });
-    }
-    timeoutRef.current = setTimeout(() => { isManualScroll.current = false; }, 1000);
+  const getDamageBadgeColor = (damageType: string) => {
+    const found = damageTypes.find(d => d.name.toLowerCase() === damageType.toLowerCase());
+    return found ? found.color : '#ff4444';
   };
 
-  const onLayoutSection = (event: LayoutChangeEvent, sectionName: string) => {
-    sectionYCoords.current[sectionName] = event.nativeEvent.layout.y;
+  const toggleDamageCategory = (category: string) => {
+    setExpandedDamageCategories(prev => ({ ...prev, [category]: !prev[category] }));
+  };
+
+  // --- Handlers ---
+  const handleLayout = (e: LayoutChangeEvent, section: string) => {
+    sectionYCoords.current[section] = e.nativeEvent.layout.y;
+  };
+
+  const handleTabPress = (tab: string) => {
+    setActiveTab(tab);
+    isManualScroll.current = true;
+    requestAnimationFrame(() => {
+      const y = sectionYCoords.current[tab];
+      if (y !== undefined && scrollViewRef.current) {
+        // Adjust for header and sticky tabs
+        scrollViewRef.current.scrollTo({ y: y - TAB_BAR_HEIGHT - 10, animated: true });
+      }
+    });
+    setTimeout(() => { isManualScroll.current = false; }, 400);
   };
 
   const onScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (isManualScroll.current) return;
     const scrollY = event.nativeEvent.contentOffset.y;
-    const triggerPoint = scrollY + TAB_BAR_HEIGHT + 50;
-
-    let newActiveTab = tabs[0];
-    for (let i = tabs.length - 1; i >= 0; i--) {
-      const tab = tabs[i];
-      const sectionTop = sectionYCoords.current[tab];
-      if (sectionTop !== undefined && triggerPoint >= sectionTop) {
-        newActiveTab = tab;
-        break;
+    // Trigger point adjusted for sticky header height
+    const triggerPoint = scrollY + TAB_BAR_HEIGHT + 100;
+    let currentTab = dynamicTabs[0];
+    for (const tab of dynamicTabs) {
+      const sectionY = sectionYCoords.current[tab];
+      if (sectionY !== undefined && triggerPoint >= sectionY) {
+        currentTab = tab;
       }
     }
-    if (newActiveTab !== activeTab) setActiveTab(newActiveTab);
-  };
-
-  // Helper to open PDF
-  const openPdfReport = () => {
-    if (inspectionData?.file_path) {
-      // Construct full URL. Ensure no double slashes if path has leading slash
-      const path = inspectionData.file_path.startsWith('/') ? inspectionData.file_path.substring(1) : inspectionData.file_path;
-
-      // If the path is already a full URL, use it, otherwise append base
-      const url = path.startsWith('http') ? path : `${STORAGE_BASE_URL}${path}`;
-
-      Linking.canOpenURL(url).then(supported => {
-        if (supported) {
-          Linking.openURL(url);
-        } else {
-          console.log("Cannot open URL: " + url);
-        }
-      });
+    if (currentTab !== activeTab) {
+      setActiveTab(currentTab);
     }
   };
 
-  if (loading) return <View style={styles.loadingCenter}><ActivityIndicator size="large" color="#cadb2a" /></View>;
-  if (!auctionData?.vehicle) return null;
-
-  const { vehicle, all_interior_features, all_exterior_features } = auctionData;
-
-  // --- Image Logic ---
-  const getImageUrl = (img: string | Models.VehicleImage | null | undefined): string | null => {
-    if (!img) return null;
-    if (typeof img === 'string') return img;
-    return img.path;
+  const handleBookNow = () => {
+    if (fullData?.vehicle) {
+      navigation.navigate('BookCar', { vehicle: fullData.vehicle });
+    } else {
+      showAlert("Error", "Vehicle data not available.");
+    }
   };
 
-  let imageList: string[] = [];
-  if (vehicle.images && vehicle.images.length > 0) {
-    imageList = vehicle.images.map(img => getImageUrl(img)).filter((url): url is string => !!url);
-  } else if (vehicle.cover_image) {
-    const cover = getImageUrl(vehicle.cover_image);
-    if (cover) imageList.push(cover);
-  } else if (vehicle.brand?.image_source) {
-    imageList.push(vehicle.brand.image_source);
-  } else {
-    imageList.push('https://c.animaapp.com/mg9397aqkN2Sch/img/tesla.png');
+  const handleViewBooking = () => {
+    navigation.navigate('ViewBooking', { vehicleId: carId });
+  };
+
+  const handleImageOpen = (uri: string, isMap: boolean = false) => {
+    setPreviewImage(uri);
+    setIsPreviewMap(isMap);
+  };
+
+  const handleVideoOpen = (uri: string) => {
+    setCurrentVideoUrl(uri);
+    setVideoModalVisible(true);
+  };
+
+  // --- Data Parsing ---
+  const latestInspection = useMemo(() => {
+    if (!fullData?.inspections && !fullData?.vehicle?.inspections) return null;
+    const list = fullData.inspections || fullData.vehicle.inspections || [];
+    return list.length > 0 ? list[list.length - 1] : null;
+  }, [fullData]);
+
+  const groupedDamages = useMemo(() => {
+    if (!latestInspection?.damages) return {};
+    const groups: { [key: string]: any[] } = {};
+    latestInspection.damages.forEach((dmg: any) => {
+      let category = 'Other';
+      const part = (dmg.body_part || '').toLowerCase();
+      if (part.includes('door') || part.includes('fender') || part.includes('panel')) category = 'Doors & Panels';
+      else if (part.includes('glass') || part.includes('shield') || part.includes('light')) category = 'Glass & Lights';
+      else if (part.includes('bumper') || part.includes('hood') || part.includes('trunk')) category = 'Bumpers & Hood';
+      else if (part.includes('wheel') || part.includes('tire') || part.includes('rim')) category = 'Wheels & Tires';
+      else if (part.includes('roof')) category = 'Roof';
+      if (!groups[category]) groups[category] = [];
+      groups[category].push(dmg);
+    });
+    return groups;
+  }, [latestInspection]);
+
+  if (loading || !fullData?.vehicle) {
+    return <View style={styles.loadingContainer}><ActivityIndicator size="large" color="#cadb2a" /></View>;
   }
 
-  const mainImageUri = imageList[0];
-  const thumbImages = imageList.length > 1 ? imageList.slice(0, 3) : [];
+  const vehicle = fullData.vehicle;
 
-  const allFeatures = [...(all_exterior_features || []), ...(all_interior_features || [])];
-  const displayedFeatures = showAllFeatures ? allFeatures : allFeatures.slice(0, 8);
+  const getCategorizedInspection = (inspection: any) => {
+    if (!inspection) return null;
+    const usedKeys = new Set<string>();
+    const getField = (key: string, label?: string) => {
+      let val = inspection[key];
+      // 🟢 FIX: Handle objects (like brand, model) or nulls gracefully
+      if (val === null || val === undefined) return null;
+      if (typeof val === 'object') {
+        if (val.name) val = val.name; // Use name if present
+        else if (val.value) val = val.value; // Use value if present
+        else return null; // Skip complex objects we can't render
+      }
 
-  // Specs
-  const specCards = [
-    { icon: 'car-shift-pattern', title: 'Transmission', sub: vehicle.transmission_id === 1 ? 'Auto' : 'Manual' },
-    { icon: 'car-door', title: 'Door & Seats', sub: `${vehicle.doors || 4} Doors, ${vehicle.seats || 5} Seats` },
-    { icon: 'fan', title: 'Air Condition', sub: 'Climate Control' },
-    { icon: 'gas-station', title: 'Fuel Type', sub: vehicle.fuel_type_id === 1 ? 'Petrol' : 'Diesel' },
-  ];
+      usedKeys.add(key);
+      let media = null;
+      if (inspection.fields) {
+        const fieldObj = inspection.fields.find((f: any) => f.name === key);
+        if (fieldObj && fieldObj.files && fieldObj.files.length > 0) media = fieldObj.files[0];
+      }
+      return { label: label || formatKey(key), value: String(val), media }; // Ensure value is a string
+    };
+
+    const categories = {
+      engine: [getField('engineCondition', 'Engine Condition'), getField('engineOil', 'Engine Oil'), getField('transmissionCondition', 'Transmission'), getField('gearOil', 'Gear Oil'), getField('fourWdSystemCondition', '4WD System')].filter((item): item is { label: string, value: any, media: any } => !!item),
+      steering: [getField('steeringOperation', 'Steering'), getField('suspension', 'Suspension'), getField('shockAbsorberOperation', 'Shock Absorbers'), getField('brakePads', 'Brake Pads')].filter((item): item is { label: string, value: any, media: any } => !!item),
+      interior: [getField('acCooling', 'AC Cooling'), getField('seatsCondition', 'Seats'), getField('sunroofCondition', 'Sunroof'), getField('windowsControl', 'Windows'), getField('centralLockOperation', 'Central Lock')].filter((item): item is { label: string, value: any, media: any } => !!item),
+      exterior: [getField('overallCondition', 'Overall'), getField('body_type', 'Body Type'), getField('parkingSensors', 'Parking Sensors')].filter((item): item is { label: string, value: any, media: any } => !!item),
+      wheels: [getField('wheelsType', 'Wheels Type'), getField('tiresSize', 'Tires Size'), getField('rimsSizeFront', 'Front Rims')].filter((item): item is { label: string, value: any, media: any } => !!item),
+    };
+
+    // 🟢 FIX: Filter out object values from "Other" keys too
+    const ignoredKeys = ['id', 'vehicle_id', 'created_at', 'updated_at', 'file_path', 'damage_file_path', 'images', 'damages', 'fields', 'paintCondition', 'final_conclusion', 'remarks', 'make', 'model', 'vehicle', 'pivot', 'inspector', 'inspector_id', 'inspection_enquiry_id', 'brand', 'vehicle_model'];
+
+    const otherItems = Object.keys(inspection)
+      .filter(key => !usedKeys.has(key) && !ignoredKeys.includes(key) && inspection[key] !== null && inspection[key] !== '')
+      .map(key => getField(key)); // getField now handles objects
+
+    // @ts-ignore
+    categories.other = otherItems.filter(item => !!item);
+    return categories;
+  };
+  const categorizedData = getCategorizedInspection(latestInspection);
+
+  const renderInspectionRow = (item: any, idx: number) => (
+    <View key={idx} style={styles.inspectionRow}>
+      <Text style={styles.inspLabel}>{item.label}</Text>
+      <View style={styles.inspValueContainer}>
+        <Text style={styles.inspValue}>{item.value}</Text>
+        {item.media && (
+          <TouchableOpacity
+            onPress={() => {
+              const path = item.media.path.startsWith('http') ? item.media.path : `${STORAGE_BASE_URL}${item.media.path}`;
+              if (item.media.file_type === 'video') handleVideoOpen(path);
+              else handleImageOpen(path, false);
+            }}
+            style={styles.mediaBtnRight}
+          >
+            <FontAwesome5 name="eye" size={16} color="#cadb2a" />
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+
+  const offerPrice = Number(vehicle.price || vehicle.starting_bid_amount || 0);
+
+  const imageList = vehicle.images?.map((img: any) => img.path) || [];
+  if (vehicle.cover_image && typeof vehicle.cover_image !== 'string') {
+    if (!imageList.includes(vehicle.cover_image.path)) imageList.unshift(vehicle.cover_image.path);
+  } else if (vehicle.brand?.image_source && imageList.length === 0) {
+    imageList.push(vehicle.brand.image_source);
+  }
+
+  const exteriorFeatures = fullData?.exterior_features || [];
+  const interiorFeatures = fullData?.interior_features || [];
+  const allFeaturesCombined = [...exteriorFeatures, ...interiorFeatures];
+  const displayedFeatures = showAllFeatures ? allFeaturesCombined : allFeaturesCombined.slice(0, 10);
+  const dynamicTabs = ['Overview', 'Details'];
+  if (allFeaturesCombined.length > 0) dynamicTabs.push('Features');
+  if (latestInspection) dynamicTabs.push('Inspection');
+  dynamicTabs.push('Remarks');
 
   const detailItems = [
-    { label: 'Fuel Type', val: vehicle.fuel_type_id === 1 ? 'Petrol' : 'Diesel', icon: 'gas-station' },
-    { label: 'Drivetrain', val: vehicle.drive_type || 'AWD', icon: 'car-cog' },
-    { label: 'Engine', val: `${vehicle.engine_cc} cc`, icon: 'engine' },
-    { label: 'Exterior Color', val: vehicle.color || 'N/A', icon: 'palette' },
-    { label: 'Interior Color', val: vehicle.interior_color || 'N/A', icon: 'seat-recline-normal' },
-    { label: 'Transmission', val: vehicle.transmission_id === 1 ? 'Automatic' : 'Manual', icon: 'car-shift-pattern' },
-  ];
+    { label: 'VIN', val: vehicle.vin },
+    { label: 'Engine Type', val: vehicle.engine_type },
+    { label: 'Engine CC', val: vehicle.engine_cc ? `${vehicle.engine_cc} cc` : null },
+    { label: 'Horsepower', val: vehicle.horsepower },
+    { label: 'Torque', val: vehicle.torque },
+    { label: 'Cylinders', val: vehicle.no_of_cylinder },
+    { label: 'Drive Type', val: vehicle.drive_type },
+    { label: 'Fuel Type', val: vehicle.fuel_type_id === 1 ? 'Petrol' : (vehicle.fuel_type_id === 2 ? 'Diesel' : null) },
+    { label: 'Transmission', val: vehicle.transmission_id === 1 ? 'Automatic' : (vehicle.transmission_id === 2 ? 'Manual' : null) },
+    { label: 'Body Type', val: vehicle.body_type_id },
+    { label: 'Color', val: vehicle.color },
+    { label: 'Interior', val: vehicle.interior_color },
+    { label: 'Mileage', val: vehicle.mileage ? `${vehicle.mileage} km` : null },
+    { label: 'Condition', val: vehicle.condition },
+  ].filter(item => item.val !== null && item.val !== undefined && item.val !== '');
+
+  const renderStatusCard = () => {
+    if (bookingStatus !== 'none') {
+      if (bookingStatus === 'pending_payment') {
+        return (
+          <View style={styles.statusCard}>
+            <Feather name="clock" size={40} color="#ffaa00" style={{ marginBottom: 10 }} />
+            <Text style={styles.statusTitle}>Booking Confirmation Pending</Text>
+            <Text style={styles.statusSubText}>You have successfully booked this vehicle. Waiting for admin confirmation.</Text>
+          </View>
+        );
+      }
+      if (bookingStatus === 'intransfer') {
+        return (
+          <View style={styles.statusCard}>
+            <MaterialCommunityIcons name="truck-delivery" size={40} color="#00a8ff" style={{ marginBottom: 10 }} />
+            <Text style={styles.statusTitle}>Vehicle In-Transfer</Text>
+            <Text style={styles.statusSubText}>Your vehicle is currently being transferred.</Text>
+          </View>
+        );
+      }
+      if (bookingStatus === 'delivered') {
+        return (
+          <View style={styles.statusCard}>
+            <Feather name="check-circle" size={40} color="#cadb2a" style={{ marginBottom: 10 }} />
+            <Text style={styles.statusTitle}>Vehicle Delivered</Text>
+            <Text style={styles.statusSubText}>Your vehicle has been successfully delivered.</Text>
+          </View>
+        );
+      }
+    }
+    return null;
+  };
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconButton}>
-          <Feather name="arrow-left" size={24} color="#fff" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Car Detail Page</Text>
-        <TouchableOpacity style={styles.iconButton}>
-          <Feather name="bell" size={24} color="#cadb2a" />
-        </TouchableOpacity>
-      </View>
+      <LinearGradient colors={['#000000', '#1a1a00', '#26270c']} style={styles.gradient}>
 
-      <ScrollView
-        ref={scrollViewRef}
-        onScroll={onScroll}
-        scrollEventThrottle={16}
-        stickyHeaderIndices={[1]}
-        contentContainerStyle={{ paddingBottom: 100 }}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* --- Top Section --- */}
-        <View>
-          <View style={styles.mainImageContainer}>
-            <TouchableOpacity onPress={() => setPreviewImage(mainImageUri)} activeOpacity={0.9}>
-              <Image source={{ uri: mainImageUri }} style={styles.carImageMain} resizeMode="cover" />
-            </TouchableOpacity>
-            <View style={styles.priceOverlay}>
-              <Text style={styles.priceLabel}>Starting Bid</Text>
-              <Text style={styles.priceText}>AED {Number(vehicle.starting_bid_amount).toLocaleString()}</Text>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn}>
+            <Feather name="arrow-left" size={24} color="#fff" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Vehicle Details</Text>
+          <View style={{ width: 24 }} />
+        </View>
+
+        {/* ScrollView with Sticky Indices */}
+        {/* 🟢 Sticky Header is at Index 1 (Tabs), because Index 0 is the banner/description wrapper */}
+        <ScrollView
+          ref={scrollViewRef}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
+          stickyHeaderIndices={[1]}
+          showsVerticalScrollIndicator={false}
+        >
+
+          {/* Index 0: Top Wrapper (Banner, Desc, Status Card) */}
+          <View>
+            {/* BANNER SLIDER WITH OVERLAY */}
+            <View style={{ height: 250, marginBottom: 15 }}>
+              <ScrollView
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                onMomentumScrollEnd={(e) => {
+                  const idx = Math.round(e.nativeEvent.contentOffset.x / width);
+                  setActiveBannerIndex(idx);
+                }}
+              >
+                {imageList.map((img, index) => (
+                  <TouchableOpacity key={index} onPress={() => handleImageOpen(img, false)}>
+                    <Image source={{ uri: img }} style={{ width: width, height: 250, resizeMode: 'cover' }} />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              <LinearGradient colors={['transparent', 'rgba(0,0,0,0.8)', 'rgba(0,0,0,0.95)']} style={styles.imageOverlay}>
+                <View style={styles.bannerContent}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', }}>
+                    <View style={{ flex: 1, paddingRight: 5 }}>
+                      <Text style={styles.carBrand}>{vehicle.brand?.name}</Text>
+                      <Text style={styles.carModel} numberOfLines={2} adjustsFontSizeToFit>
+                        {vehicle.vehicle_model?.name} {vehicle.year}
+                      </Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={[styles.bannerPriceLabel, { textAlign: 'right' }]}>Offer Price</Text>
+                        <Text style={styles.bannerPriceValue}>AED {offerPrice.toLocaleString()}</Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              </LinearGradient>
+              <View style={styles.paginationContainer}>
+                {imageList.map((_, i) => (
+                  <View key={i} style={[styles.dot, i === activeBannerIndex && styles.activeDot]} />
+                ))}
+              </View>
             </View>
+
+            {vehicle.description && (
+              <View style={[styles.sectionContainer, { paddingTop: 0 }]}>
+                <Text style={styles.sectionTitle}>Description</Text>
+                <Text style={styles.descriptionText}>{vehicle.description}</Text>
+              </View>
+            )}
+
+            {renderStatusCard()}
           </View>
 
-          {imageList.length > 1 && (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10, paddingLeft: 16 }}>
-              {imageList.map((img, idx) => (
-                <TouchableOpacity key={idx} onPress={() => setPreviewImage(img)} style={{ marginRight: 10, borderWidth: 1, borderColor: '#cadb2a', borderRadius: 8 }}>
-                  <Image source={{ uri: img }} style={{ width: 80, height: 60, borderRadius: 8 }} />
-                </TouchableOpacity>
+          {/* Index 1: Sticky Tabs */}
+          <View style={styles.stickyTabContainer}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabContent}>
+              {dynamicTabs.map((tab) => (
+                <Pressable
+                  key={tab}
+                  style={[styles.tabItem, activeTab === tab && styles.activeTabItem]}
+                  onPress={() => handleTabPress(tab)}
+                >
+                  <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>{tab}</Text>
+                </Pressable>
               ))}
             </ScrollView>
-          )}
-
-          <View style={styles.specGrid}>
-            {specCards.map((item, idx) => (
-              <View key={idx} style={styles.specCard}>
-                <MaterialCommunityIcons name={item.icon as any} size={28} color="#cadb2a" style={{ marginBottom: 8 }} />
-                <Text style={styles.specTitle}>{item.title}</Text>
-                <Text style={styles.specSub}>{item.sub}</Text>
-              </View>
-            ))}
           </View>
-        </View>
 
-        {/* --- Sticky Tabs --- */}
-        <View style={styles.stickyTabs}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16 }}>
-            {tabs.map(tab => (
-              <TouchableOpacity
-                key={tab}
-                style={[styles.tabItem, activeTab === tab && styles.activeTabItem]}
-                onPress={() => handleTabPress(tab)}
-              >
-                <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>{tab}</Text>
+          {/* Index 2+: Sections */}
+          <View onLayout={(e) => handleLayout(e, 'Overview')} style={styles.sectionContainer}>
+            <Text style={styles.sectionTitle}>Overview</Text>
+            <View style={styles.specCardsGrid}>
+              <SpecCard icon="car-shift-pattern" title="Trans." sub={vehicle.transmission_id === 1 ? 'Auto' : 'Manual'} />
+              <SpecCard icon="car-door" title="Seats" sub={`${vehicle.doors || 'N/A'} Dr, ${vehicle.seats || 'N/A'} St`} />
+              <SpecCard icon="fan" title="A/C" sub="Climate Ctrl" />
+              <SpecCard icon="gas-station" title="Fuel" sub={vehicle.fuel_type_id === 1 ? 'Petrol' : (vehicle.fuel_type_id === 2 ? 'Diesel' : 'N/A')} />
+            </View>
+          </View>
+
+          <View onLayout={(e) => handleLayout(e, 'Details')} style={styles.sectionContainer}>
+            <Text style={styles.sectionTitle}>Vehicle Details</Text>
+            <View style={styles.detailsListContainer}>
+              {detailItems.slice(0, showAllDetails ? undefined : 8).map((item, idx) => {
+                const isLast = idx === (showAllDetails ? detailItems.length : 8) - 1;
+                return (
+                  <View key={idx} style={[styles.detailListRow, isLast && { borderBottomWidth: 0 }]}>
+                    <Text style={styles.detailListLabel}>{item.label}</Text>
+                    <Text style={styles.detailListValue}>{item.val}</Text>
+                  </View>
+                );
+              })}
+            </View>
+            {detailItems.length > 8 && (
+              <TouchableOpacity style={styles.showMoreBtn} onPress={() => setShowAllDetails(!showAllDetails)}>
+                <Text style={styles.showMoreText}>{showAllDetails ? 'Show Less' : 'Show More ...'}</Text>
               </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-
-        {/* --- Details Section --- */}
-        <View onLayout={(e) => onLayoutSection(e, 'Details')} style={styles.section}>
-          {detailItems.map((item, idx) => (
-            <View key={idx} style={styles.detailRow}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <MaterialCommunityIcons name={item.icon as any} size={18} color="#888" style={{ marginRight: 10 }} />
-                <Text style={styles.detailLabel}>{item.label}</Text>
-              </View>
-              <Text style={styles.detailVal}>{item.val}</Text>
-            </View>
-          ))}
-        </View>
-
-        {/* --- Features Section --- */}
-        <View onLayout={(e) => onLayoutSection(e, 'Features')} style={styles.section}>
-          <View style={styles.featureHeader}>
-            <Text style={styles.sectionTitle}>Features</Text>
-            <View style={styles.badgeIcon}><Text style={{ color: '#000', fontSize: 10, fontWeight: 'bold' }}>PRO</Text></View>
+            )}
           </View>
-          {displayedFeatures.map((f, idx) => (
-            <View key={idx} style={styles.featureRow}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <View style={styles.bullet} />
-                <Text style={styles.featureText}>{f.name}</Text>
+
+          {allFeaturesCombined.length > 0 && (
+            <View onLayout={(e) => handleLayout(e, 'Features')} style={styles.sectionContainer}>
+              <View style={styles.featureHeader}>
+                <Text style={styles.sectionTitle}>Features</Text>
+                <View style={styles.badgeIcon}><Text style={{ color: '#000', fontSize: 10, fontWeight: 'bold' }}>PRO</Text></View>
               </View>
-              <Feather name="check-circle" size={18} color="#cadb2a" />
-            </View>
-          ))}
-          {allFeatures.length > 8 && (
-            <TouchableOpacity style={styles.showMoreBtn} onPress={() => setShowAllFeatures(!showAllFeatures)}>
-              <Text style={styles.showMoreText}>{showAllFeatures ? 'Show Less' : 'Show More ...'}</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* --- INSPECTION SECTION (Data from inspections array) --- */}
-        <View onLayout={(e) => onLayoutSection(e, 'Inspection')} style={styles.section}>
-          <Text style={styles.sectionTitle}>Inspection Report</Text>
-
-          {inspectionData ? (
-            <>
-              {/* 1. PDF Report Button */}
-              {inspectionData.file_path && (
-                <TouchableOpacity style={styles.pdfButton} onPress={openPdfReport}>
-                  <MaterialCommunityIcons name="file-pdf-box" size={24} color="#000" />
-                  <Text style={styles.pdfButtonText}>View Full Report (PDF)</Text>
+              {displayedFeatures.map((f: any, idx: number) => (
+                <View key={idx} style={styles.featureRow}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                    <View style={styles.bullet} />
+                    <Text style={styles.featureText}>{f.name}</Text>
+                  </View>
+                  <Feather name="check-circle" size={18} color="#cadb2a" />
+                </View>
+              ))}
+              {allFeaturesCombined.length > 10 && (
+                <TouchableOpacity style={styles.showMoreBtn} onPress={() => setShowAllFeatures(!showAllFeatures)}>
+                  <Text style={styles.showMoreText}>{showAllFeatures ? 'Show Less' : 'Show More ...'}</Text>
                 </TouchableOpacity>
               )}
+            </View>
+          )}
 
-              {/* 2. Damage Map Image */}
-              {inspectionData.damage_file_path && (
-                <View style={styles.damageMapContainer}>
-                  <Text style={[styles.detailLabel, { marginBottom: 10, color: '#000', fontWeight: 'bold' }]}>Damage Assessment Map</Text>
-                  <TouchableOpacity onPress={() => setPreviewImage(inspectionData.damage_file_path || '')}>
-                    <Image
-                      source={{ uri: inspectionData.damage_file_path }}
-                      style={styles.damageMapImage}
-                      resizeMode="contain"
-                    />
+          {latestInspection && (
+            <View onLayout={(e) => handleLayout(e, 'Inspection')} style={styles.sectionContainer}>
+              <Text style={styles.sectionTitle}>Inspection Report</Text>
+
+              <InspectionAccordion title="Engine & Transmission" isOpen={activeAccordion === 'Engine'} onPress={() => setActiveAccordion(activeAccordion === 'Engine' ? null : 'Engine')}>
+                {categorizedData.engine.length > 0 ? categorizedData.engine.map(renderInspectionRow) : <Text style={{ color: '#666' }}>No data.</Text>}
+              </InspectionAccordion>
+              <InspectionAccordion title="Steering & Suspension" isOpen={activeAccordion === 'Steering'} onPress={() => setActiveAccordion(activeAccordion === 'Steering' ? null : 'Steering')}>
+                {categorizedData.steering.length > 0 ? categorizedData.steering.map(renderInspectionRow) : <Text style={{ color: '#666' }}>No data.</Text>}
+              </InspectionAccordion>
+              <InspectionAccordion title="Interior & Electrical" isOpen={activeAccordion === 'Interior'} onPress={() => setActiveAccordion(activeAccordion === 'Interior' ? null : 'Interior')}>
+                {categorizedData.interior.length > 0 ? categorizedData.interior.map(renderInspectionRow) : <Text style={{ color: '#666' }}>No data.</Text>}
+              </InspectionAccordion>
+              <InspectionAccordion title="Exterior" isOpen={activeAccordion === 'Exterior'} onPress={() => setActiveAccordion(activeAccordion === 'Exterior' ? null : 'Exterior')}>
+                {categorizedData.exterior.length > 0 ? categorizedData.exterior.map(renderInspectionRow) : <Text style={{ color: '#666' }}>No data.</Text>}
+              </InspectionAccordion>
+              <InspectionAccordion title="Wheels & Tires" isOpen={activeAccordion === 'Wheels'} onPress={() => setActiveAccordion(activeAccordion === 'Wheels' ? null : 'Wheels')}>
+                {categorizedData.wheels.length > 0 ? categorizedData.wheels.map(renderInspectionRow) : <Text style={{ color: '#666' }}>No data.</Text>}
+              </InspectionAccordion>
+
+              {/* @ts-ignore */}
+              {categorizedData.other && categorizedData.other.length > 0 && (
+                <InspectionAccordion title="Other Information" isOpen={activeAccordion === 'Other'} onPress={() => setActiveAccordion(activeAccordion === 'Other' ? null : 'Other')}>
+                  {/* @ts-ignore */}
+                  {categorizedData.other.map(renderInspectionRow)}
+                </InspectionAccordion>
+              )}
+
+              {latestInspection.final_conclusion ? (
+                <View style={[styles.commentContainer, { borderTopWidth: 1, borderTopColor: '#333', paddingTop: 10 }]}>
+                  <Text style={[styles.subSectionTitle, { color: '#cadb2a' }]}>Final Conclusion</Text>
+                  <Text style={[styles.descriptionText, { fontWeight: 'bold' }]}>{latestInspection.final_conclusion}</Text>
+                </View>
+              ) : null}
+
+              {latestInspection.damage_file_path && (
+                <View style={{ marginTop: 20 }}>
+                  <TouchableOpacity onPress={() => handleImageOpen(latestInspection.damage_file_path || '', true)} style={styles.damageMapContainer}>
+                    <Image source={{ uri: latestInspection.damage_file_path }} style={styles.damageMapImage} resizeMode="cover" />
                   </TouchableOpacity>
                 </View>
               )}
 
-              {/* 3. Paint Condition */}
-              {inspectionData.paintCondition && inspectionData.paintCondition.length > 0 && (
+              {latestInspection.paintCondition && latestInspection.paintCondition.length > 0 && (
                 <View style={styles.infoBlock}>
-                  <Text style={styles.infoLabel}>Paint Condition</Text>
+                  <Text style={styles.subSectionTitle}>Paint Condition</Text>
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5 }}>
-                    {inspectionData.paintCondition.map((pc: string, i: number) => (
-                      <View key={i} style={styles.tag}>
-                        <Text style={styles.tagText}>{pc}</Text>
-                      </View>
-                    ))}
+                    {latestInspection.paintCondition.map((pc: string, i: number) => {
+                      const { backgroundColor, label } = getPaintBadgeColor(pc);
+                      return <View key={i} style={[styles.tag, { backgroundColor }]}><Text style={[styles.tagText, { color: '#fff', fontWeight: 'bold' }]}>{label}</Text></View>;
+                    })}
                   </View>
                 </View>
               )}
 
-              {/* 4. Detailed Inspection Grid */}
-              <View style={styles.inspectionGrid}>
-                {[
-                  { label: 'Engine', value: inspectionData.engineCondition },
-                  { label: 'Gearbox', value: inspectionData.transmissionCondition },
-                  { label: 'AC Cooling', value: inspectionData.acCooling },
-                  { label: 'Suspension', value: inspectionData.suspension },
-                  { label: 'Steering', value: inspectionData.steeringOperation },
-                  { label: 'Oil Leak', value: inspectionData.engineOil },
-                ].map((item, idx) => (
-                  item.value ? (
-                    <View key={idx} style={styles.inspectionItem}>
-                      <Text style={styles.inspectionLabel}>{item.label}</Text>
-                      <Text style={styles.inspectionValue} numberOfLines={1}>{item.value}</Text>
-                    </View>
-                  ) : null
-                ))}
-              </View>
-
-              {/* 5. Reported Damages List (If available) */}
-              {inspectionData.damages && inspectionData.damages.length > 0 ? (
+              {latestInspection.damages && latestInspection.damages.length > 0 && (
                 <View style={{ marginTop: 20 }}>
-                  <Text style={[styles.sectionTitle, { fontSize: 14, color: '#fff' }]}>Reported Damages</Text>
-                  {inspectionData.damages.map((dmg: any, idx: number) => (
-                    <View key={idx} style={styles.damageRow}>
-                      <Feather name="alert-triangle" size={16} color="#ff4444" />
-                      <View style={{ marginLeft: 10, flex: 1 }}>
-                        <Text style={styles.damageTitle}>{dmg.body_part} - {dmg.type}</Text>
-                        <Text style={styles.damageSub}>Severity: {dmg.severity}</Text>
+                  <Text style={[styles.sectionTitle, { fontSize: 14, color: '#ff5555', marginBottom: 10 }]}>Reported Damages</Text>
+                  {Object.entries(groupedDamages).map(([cat, items]) => {
+                    const isExpanded = expandedDamageCategories[cat];
+                    const displayedItems = isExpanded ? items : items.slice(0, 4);
+                    return (
+                      <View key={cat} style={{ marginBottom: 25 }}>
+                        <Text style={[styles.subSectionTitle, { color: '#cadb2a', marginBottom: 12 }]}>{cat}</Text>
+                        <View style={styles.damagesGrid}>
+                          {displayedItems.map((dmg: any, idx: number) => {
+                            const borderColor = getSeverityBorderColor(dmg.severity);
+                            const severityColor = getDamageBadgeColor(dmg.type);
+                            return (
+                              <View key={idx} style={[styles.damageGridItem, { borderColor: borderColor, borderWidth: 0.1 }]}>
+                                <View style={[styles.damageBadge, { backgroundColor: severityColor }]}>
+                                  <Feather name="alert-circle" size={12} color="#fff" />
+                                  <Text style={styles.damageText} numberOfLines={1}>{dmg.type}</Text>
+                                </View>
+                                <Text style={styles.damageBodyPart} numberOfLines={2}>{dmg.body_part}</Text>
+                                <Text style={[styles.damageSubText, { color: '#aaa' }]}>{dmg.severity}</Text>
+                              </View>
+                            );
+                          })}
+                        </View>
+                        {items.length > 4 && (
+                          <TouchableOpacity style={styles.showMoreBtn} onPress={() => toggleDamageCategory(cat)}>
+                            <Text style={styles.showMoreText}>{isExpanded ? `Show Less` : `Show More (${items.length - 4})`}</Text>
+                          </TouchableOpacity>
+                        )}
                       </View>
-                    </View>
-                  ))}
-                </View>
-              ) : (
-                <View style={{ marginTop: 15, flexDirection: 'row', alignItems: 'center' }}>
-                  <Feather name="check-circle" size={16} color="#cadb2a" />
-                  <Text style={{ color: '#ccc', marginLeft: 8, fontFamily: 'Poppins' }}>No specific damages listed.</Text>
+                    );
+                  })}
                 </View>
               )}
-            </>
-          ) : (
-            <View style={styles.noReportBox}>
-              <Feather name="file-text" size={24} color="#555" />
-              <Text style={styles.descriptionText}>No inspection report available yet.</Text>
+
+              {/* INSPECTION SLIDER */}
+              {latestInspection.images && latestInspection.images.length > 0 && (
+                <View style={{ marginTop: 20 }}>
+                  <Text style={[styles.sectionTitle, { paddingHorizontal: 0 }]}>Inspection Gallery</Text>
+                  <View style={{ height: 250, width: width, marginLeft: -16 }}>
+                    <ScrollView
+                      horizontal
+                      pagingEnabled
+                      showsHorizontalScrollIndicator={false}
+                      onMomentumScrollEnd={(e) => {
+                        const idx = Math.round(e.nativeEvent.contentOffset.x / width);
+                        setActiveInspectionIndex(idx);
+                      }}
+                    >
+                      {latestInspection.images.map((img: any, idx: number) => {
+                        const uri = img.path.startsWith('http') ? img.path : `${STORAGE_BASE_URL}${img.path}`;
+                        return (
+                          <TouchableOpacity
+                            key={idx}
+                            onPress={() => handleImageOpen(uri, false)}
+                            activeOpacity={0.9}
+                          >
+                            <Image source={{ uri }} style={{ width: width, height: 250, resizeMode: 'cover' }} />
+                          </TouchableOpacity>
+                        )
+                      })}
+                    </ScrollView>
+                    <View style={styles.paginationContainer}>
+                      {latestInspection.images.map((_: any, i: number) => (
+                        <View key={i} style={[styles.dot, i === activeInspectionIndex && styles.activeDot]} />
+                      ))}
+                    </View>
+                  </View>
+                </View>
+              )}
+
             </View>
           )}
-        </View>
 
-        {/* --- Exterior Section --- */}
-        <View onLayout={(e) => onLayoutSection(e, 'Exterior')} style={styles.section}>
-          <Text style={styles.sectionTitle}>Exterior</Text>
-          <Image
-            source={{ uri: mainImageUri }}
-            style={{ width: '100%', height: 200, borderRadius: 12, marginTop: 10 }}
-            resizeMode="contain"
-          />
-          <Text style={[styles.descriptionText, { marginTop: 10 }]}>{vehicle.description || "No additional description provided."}</Text>
-        </View>
-
-        {/* --- Comments Section --- */}
-        <View onLayout={(e) => onLayoutSection(e, 'Comments')} style={styles.section}>
-          <View style={styles.commentBox}>
-            <Text style={styles.featureText}>Comments & Terms Conditions</Text>
-            <Feather name="chevron-down" size={20} color="#cadb2a" />
+          <View onLayout={(e) => handleLayout(e, 'Remarks')} style={styles.sectionContainer}>
+            <View style={styles.commentBox}>
+              <Text style={styles.featureText}>Comments & Remarks</Text>
+              <Feather name="message-square" size={20} color="#cadb2a" />
+            </View>
+            <Text style={[styles.descriptionText, { marginTop: 10 }]}>{vehicle.remarks || "No remarks."}</Text>
           </View>
-          {vehicle.remarks && <Text style={[styles.descriptionText, { marginTop: 10 }]}>Remarks: {vehicle.remarks}</Text>}
-        </View>
 
-      </ScrollView>
+          <View style={{ height: 100 }} />
+        </ScrollView>
 
-      {/* Image Preview Modal */}
-      <ImagePreviewModal
-        visible={!!previewImage}
-        imageUrl={previewImage || ''}
-        onClose={() => setPreviewImage(null)}
-      />
+        {/* Footer: Buy Now Button (if not booked) */}
+        {bookingStatus === 'none' ? (
+          <View style={styles.negotiationFooter}>
+            <TouchableOpacity style={styles.footerBtnFilled} onPress={handleBookNow}>
+              <Text style={styles.footerBtnTextFilled}>Buy Now</Text>
+            </TouchableOpacity>
+            <Text style={styles.adminFeeText}>*Admin fee <Text style={styles.adminFeeBold}>AED 1,499</Text> will be charged</Text>
+          </View>
+        ) : (
+          <View style={styles.negotiationFooter}>
+            <TouchableOpacity style={styles.footerBtnFilled} onPress={handleViewBooking}>
+              <Text style={styles.footerBtnTextFilled}>View Booking Status</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        <ImagePreviewModal
+          visible={!!previewImage}
+          imageUrl={previewImage || ''}
+          onClose={() => setPreviewImage(null)}
+          isWhiteBackground={isPreviewMap}
+        />
+
+        <VideoPlayerModal
+          visible={videoModalVisible}
+          videoUrl={currentVideoUrl}
+          onClose={() => setVideoModalVisible(false)}
+        />
+
+      </LinearGradient>
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
-  loadingCenter: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 50, paddingBottom: 15 },
-  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#fff', fontFamily: 'Poppins' },
-  iconButton: { padding: 8 },
+  loadingContainer: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
+  gradient: { flex: 1 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 20, paddingBottom: 10 },
+  headerBtn: { padding: 5 },
+  headerTitle: { fontSize: 20, fontWeight: '700', color: '#fff', fontFamily: 'Poppins' },
 
-  mainImageContainer: { width: '100%', height: 220, position: 'relative' },
-  carImageMain: { width: '100%', height: '100%' },
-  priceOverlay: { position: 'absolute', bottom: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.7)', padding: 8, borderRadius: 8 },
-  priceLabel: { color: '#aaa', fontSize: 10, fontFamily: 'Poppins' },
-  priceText: { color: '#cadb2a', fontSize: 16, fontFamily: 'Poppins', fontWeight: '700' },
+  // Banner
+  imageOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 15, paddingTop: 60, justifyContent: 'flex-end' },
+  bannerContent: { flexDirection: 'column', gap: 4, marginBottom: 12 },
+  carBrand: { color: '#cadb2a', fontSize: 14, fontWeight: 'bold', fontFamily: 'Poppins' },
+  carModel: { color: '#fff', fontSize: 22, fontWeight: 'bold', fontFamily: 'Poppins' },
+  bannerPriceLabel: { color: '#aaa', fontSize: 10, fontFamily: 'Poppins', marginBottom: 2 },
+  bannerPriceValue: { color: '#fff', fontSize: 16, fontWeight: 'bold', fontFamily: 'Lato' },
+  bannerDivider: { width: 1, height: 30, backgroundColor: 'rgba(255,255,255,0.3)', marginHorizontal: 15 },
+  paginationContainer: { flexDirection: 'row', justifyContent: 'center', position: 'absolute', bottom: 10, width: '100%' },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.3)', marginHorizontal: 4 },
+  activeDot: { backgroundColor: '#cadb2a', width: 20 },
 
-  specGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, padding: 16 },
+  // Tabs
+  stickyTabContainer: { backgroundColor: '#111', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#222', zIndex: 100 },
+  tabContent: { paddingHorizontal: 16 },
+  tabItem: { paddingVertical: 8, paddingHorizontal: 16, marginRight: 10, borderRadius: 20, backgroundColor: '#000' },
+  activeTabItem: { backgroundColor: '#cadb2a', borderWidth: 2, borderColor: '#000' },
+  tabText: { color: '#fff', fontSize: 13, fontFamily: 'Poppins' },
+  activeTabText: { color: '#111', fontWeight: 'bold' },
+
+  // Sections
+  sectionContainer: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 20 },
+  sectionTitle: { color: '#cadb2a', fontSize: 16, fontWeight: 'bold', fontFamily: 'Poppins', marginBottom: 10 },
+  subSectionTitle: { color: '#aaa', fontSize: 13, fontWeight: '600', fontFamily: 'Poppins', marginBottom: 8, marginTop: 5 },
+  descriptionText: { color: '#ccc', fontSize: 14, fontFamily: 'Poppins', lineHeight: 20 },
+
+  // Specs & Details
+  specCardsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   specCard: { width: '48%', backgroundColor: '#111', borderRadius: 12, padding: 16, marginBottom: 0, borderWidth: 1, borderColor: '#222' },
   specTitle: { color: '#fff', fontSize: 14, fontWeight: 'bold', fontFamily: 'Poppins' },
   specSub: { color: '#888', fontSize: 12, marginTop: 4, fontFamily: 'Poppins' },
-
-  stickyTabs: { backgroundColor: '#000', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#222' },
-  tabItem: { marginRight: 15, paddingHorizontal: 15, paddingVertical: 6, borderRadius: 20, backgroundColor: '#111' },
-  activeTabItem: { backgroundColor: '#cadb2a' },
-  tabText: { color: '#fff', fontFamily: 'Poppins', fontSize: 14 },
-  activeTabText: { color: '#000', fontWeight: 'bold' },
-
-  section: { paddingHorizontal: 16, paddingTop: 20 },
-  sectionTitle: { color: '#cadb2a', fontSize: 16, fontWeight: 'bold', fontFamily: 'Poppins', marginBottom: 10 },
-
-  detailRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#222' },
-  detailLabel: { color: '#fff', fontSize: 14, fontFamily: 'Poppins' },
-  detailVal: { color: '#fff', fontSize: 14, fontWeight: 'bold', fontFamily: 'Poppins' },
-
-  featureHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  badgeIcon: { backgroundColor: '#cadb2a', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
-  featureRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 },
-  bullet: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#cadb2a', marginRight: 10 },
-  featureText: { color: '#fff', fontSize: 14, fontFamily: 'Poppins' },
+  detailsListContainer: { backgroundColor: '#111', borderRadius: 12, paddingHorizontal: 16, borderWidth: 1, borderColor: '#222' },
+  detailListRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#222', alignItems: 'center' },
+  detailListLabel: { color: '#888', fontFamily: 'Poppins', fontSize: 14 },
+  detailListValue: { color: '#fff', fontFamily: 'Poppins', fontWeight: '600', fontSize: 14, textAlign: 'right', flex: 1, marginLeft: 20 },
   showMoreBtn: { alignItems: 'center', marginTop: 15 },
   showMoreText: { color: '#888', fontSize: 14, fontFamily: 'Poppins' },
 
-  descriptionText: { color: '#ccc', fontSize: 14, fontFamily: 'Poppins', lineHeight: 20 },
-  commentBox: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: '#111', padding: 16, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: '#222' },
+  // Features
+  featureHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  badgeIcon: { backgroundColor: '#cadb2a', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
+  featureRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#222' },
+  bullet: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#cadb2a', marginRight: 15 },
+  featureText: { color: '#fff', fontSize: 14, fontFamily: 'Poppins', flex: 1 },
 
-  // Inspection Styles
-  pdfButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#cadb2a', borderRadius: 12, padding: 15, marginBottom: 20 },
-  pdfButtonText: { color: '#000', fontWeight: 'bold', fontSize: 16, marginLeft: 10, fontFamily: 'Poppins' },
-
+  // Inspection
+  inspectionRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8, borderBottomWidth: 1, borderBottomColor: '#222', paddingBottom: 8 },
+  inspLabel: { color: '#888', fontSize: 12, fontFamily: 'Poppins', flex: 1, marginRight: 10 },
+  inspValueContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', flex: 1 },
+  inspValue: { color: '#cadb2a', fontSize: 14, fontWeight: 'bold', fontFamily: 'Poppins', textAlign: 'right' },
+  mediaBtnRight: { marginLeft: 12, padding: 4 },
+  accordionContainer: { marginBottom: 10, backgroundColor: '#111', borderRadius: 10, overflow: 'hidden', borderWidth: 1, borderColor: '#222' },
+  accordionHeader: { flexDirection: 'row', justifyContent: 'space-between', padding: 15, alignItems: 'center', backgroundColor: '#1a1a1a' },
+  accordionTitle: { color: '#fff', fontSize: 14, fontWeight: 'bold', fontFamily: 'Poppins' },
+  accordionContent: { padding: 15, backgroundColor: '#000' },
+  commentContainer: { marginBottom: 15, paddingHorizontal: 5, marginTop: 20 },
   damageMapContainer: { backgroundColor: '#fff', borderRadius: 12, padding: 10, marginBottom: 15 },
   damageMapImage: { width: '100%', height: 200 },
-  infoBlock: { marginBottom: 15 },
-  infoLabel: { color: '#ccc', fontSize: 12, marginBottom: 5, fontFamily: 'Poppins' },
-  tag: { backgroundColor: '#333', borderRadius: 4, paddingHorizontal: 8, paddingVertical: 4, marginRight: 5, marginBottom: 5 },
-  tagText: { color: '#fff', fontSize: 12, fontFamily: 'Poppins' },
+  infoBlock: { marginBottom: 15, marginTop: 15 },
+  tag: { borderRadius: 4, paddingHorizontal: 8, paddingVertical: 4, marginRight: 5, marginBottom: 5 },
+  tagText: { fontSize: 12, fontFamily: 'Poppins' },
+  damagesGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  damageGridItem: { width: '48%', backgroundColor: '#181818', borderRadius: 8, padding: 10, marginBottom: 10, alignItems: 'center', borderWidth: 1, borderColor: '#333' },
+  damageBadge: { borderRadius: 4, paddingVertical: 3, paddingHorizontal: 6, flexDirection: 'row', alignItems: 'center', marginBottom: 6, width: '100%', justifyContent: 'center' },
+  damageText: { color: '#fff', fontSize: 10, fontWeight: 'bold', marginLeft: 4, textAlign: 'center' },
+  damageBodyPart: { color: '#fff', fontSize: 12, fontWeight: '600', textAlign: 'center', marginBottom: 2 },
+  damageSubText: { color: '#ccc', fontSize: 10, textAlign: 'center', marginTop: 2 },
 
-  inspectionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  inspectionItem: { width: '48%', backgroundColor: '#111', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#222' },
-  inspectionLabel: { color: '#888', fontSize: 12, fontFamily: 'Poppins' },
-  inspectionValue: { color: '#cadb2a', fontSize: 14, fontWeight: 'bold', fontFamily: 'Poppins', marginTop: 2 },
+  // Status & Footer
+  statusCard: { backgroundColor: '#111', marginHorizontal: 16, marginBottom: 20, borderRadius: 12, padding: 20, alignItems: 'center', borderWidth: 1, borderColor: '#333' },
+  statusTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold', fontFamily: 'Poppins', marginBottom: 8, textAlign: 'center' },
+  statusSubText: { color: '#aaa', fontSize: 13, fontFamily: 'Poppins', textAlign: 'center', lineHeight: 20 },
+  negotiationFooter: { flexDirection: 'column', alignItems: 'center', padding: 16, paddingBottom: 12, backgroundColor: '#000', borderTopWidth: 1, borderTopColor: '#222' },
+  footerBtnFilled: { width: '100%', backgroundColor: '#cadb2a', borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingVertical: 15 },
+  footerBtnTextFilled: { color: '#000', fontSize: 16, fontWeight: 'bold', fontFamily: 'Poppins' },
+  adminFeeText: { color: '#888', fontSize: 10, marginTop: 12, fontFamily: 'Poppins' },
+  adminFeeBold: { color: '#fff', fontWeight: 'bold' },
+  commentBox: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: '#111', padding: 16, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: '#222' },
 
-  damageRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8, backgroundColor: '#111', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#333' },
-  damageTitle: { color: '#fff', fontSize: 14, fontWeight: '600', fontFamily: 'Poppins' },
-  damageSub: { color: '#888', fontSize: 12, fontFamily: 'Poppins' },
-
-  noReportBox: { alignItems: 'center', padding: 20, backgroundColor: '#111', borderRadius: 12, borderWidth: 1, borderColor: '#222' },
-
-  // Preview
+  // Modal
   previewContainer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center' },
-  previewImage: { width: '100%', height: '80%' },
+  previewContainerWhite: { backgroundColor: '#fff' },
   previewCloseBtn: { position: 'absolute', top: 50, right: 30, zIndex: 20 },
+  videoModalContainer: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
+  videoCloseBtn: { position: 'absolute', top: 50, right: 30, zIndex: 20, padding: 10 },
+  fullscreenVideo: { width: width, height: height * 0.8 },
 });

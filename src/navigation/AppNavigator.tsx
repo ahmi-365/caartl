@@ -17,8 +17,9 @@ import ProfileScreen from '../screens/ProfileScreen';
 import EditProfileScreen from '../screens/EditProfileScreen';
 import BiddingDetailScreen from '../screens/BiddingDetailScreen';
 import BookCarScreen from '../screens/BookCarScreen';
-import MyBookingsScreen from '../screens/MyBookingsScreen'; // 1. Import Here
-import ViewBookingScreen from '../screens/ViewBookingScreen'; // Import the new screen
+import MyBookingsScreen from '../screens/MyBookingsScreen';
+import ViewBookingScreen from '../screens/ViewBookingScreen';
+import MyBiddingsScreen from '../screens/MyBiddingsScreen'; // 🟢 NEW IMPORT
 
 // Navigator
 import { DrawerNavigator } from './DrawerNavigator';
@@ -35,8 +36,9 @@ export type RootStackParamList = {
   BiddingDetail: { vehicleId: number };
   ChangePassword: undefined;
   BookCar: { vehicle: any };
-  MyBookings: undefined; // 2. Add Type Here
+  MyBookings: undefined;
   ViewBooking: { vehicleId: number };
+  MyBiddings: undefined; // 🟢 NEW TYPE
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -102,7 +104,12 @@ const MainAppStack = () => {
         <Stack.Screen
           name="MyBookings"
           component={MyBookingsScreen}
-          options={{ animation: 'fade' }} // 3. Register Screen Here
+          options={{ animation: 'fade' }}
+        />
+        <Stack.Screen
+          name="MyBiddings"
+          component={MyBiddingsScreen} // 🟢 NEW SCREEN
+          options={{ animation: 'fade' }}
         />
 
         {/* Inner Screens (Slide Animation) */}

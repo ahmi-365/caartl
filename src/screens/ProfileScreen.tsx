@@ -77,22 +77,6 @@ export default function ProfileScreen() {
             <View style={styles.separatorLine} />
           </View>
 
-          {/* Cards */}
-          <View style={styles.cardContainer}>
-            <TouchableOpacity style={styles.card}>
-              <View style={styles.cardIcon}><MaterialCommunityIcons name="card-account-details-outline" size={28} color="#CADB2A" /></View>
-              <Text style={styles.cardLabel}>ID Card</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.card}>
-              <View style={styles.cardIcon}><MaterialCommunityIcons name="card-account-details" size={28} color="#CADB2A" /></View>
-              <Text style={styles.cardLabel}>License</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.card}>
-              <View style={styles.cardIcon}><MaterialCommunityIcons name="file-document-outline" size={28} color="#CADB2A" /></View>
-              <Text style={styles.cardLabel}>Contracts</Text>
-            </TouchableOpacity>
-          </View>
-
           {/* Menu Items */}
           <View style={styles.menuContainer}>
 
@@ -189,11 +173,6 @@ const styles = StyleSheet.create({
   bioText: { color: '#ccc', fontSize: 13, fontFamily: 'Poppins', lineHeight: 20 },
 
   separatorLine: { height: 1, backgroundColor: '#CADB2A', marginHorizontal: 20, marginVertical: 20, opacity: 0.3 },
-
-  cardContainer: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, marginBottom: 30 },
-  card: { width: '30%', aspectRatio: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', borderRadius: 15, borderWidth: 1, borderColor: '#CADB2A', justifyContent: 'center', alignItems: 'center', padding: 15 },
-  cardIcon: { marginBottom: 10, width: 32, height: 32, borderRadius: 15, backgroundColor: 'rgba(202, 219, 42, 0.1)', justifyContent: 'center', alignItems: 'center' },
-  cardLabel: { fontSize: 12, color: '#fff', fontWeight: '500', textAlign: 'center', fontFamily: 'Poppins' },
 
   menuContainer: { paddingHorizontal: 20 },
   menuItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, backgroundColor: 'rgba(255,255,255,0.05)', padding: 15, borderRadius: 15, borderWidth: 1, borderColor: '#222' },

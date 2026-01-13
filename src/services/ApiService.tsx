@@ -72,7 +72,7 @@ class ApiService {
     }
   }
 
-  // ... (Existing methods: getLocations, getServices, getVehicleDetails, Auth APIs, Favorites APIs) ...
+  // ... (Existing methods) ...
 
   async getLocations(): Promise<Models.ApiResult<{ data: Models.ServiceLocation[] }>> {
     return this.apiCall('/services-locations?type=location');
@@ -142,14 +142,11 @@ class ApiService {
     return this.apiCall(query);
   }
 
-  // 🟢 NEW METHOD FOR LISTED VEHICLES
   async getListedVehicles(
     page: number = 1,
     filters: AuctionFilters = {}
   ): Promise<Models.ApiResult<Models.ApiResponse<Models.PaginatedResponse<Models.Vehicle>>>> {
-
-    let query = `/auctions/listed?page=${page}`; // Using standard laravel pagination
-
+    let query = `/auctions/listed?page=${page}`;
     if (filters.search) query += `&search=${encodeURIComponent(filters.search)}`;
     if (filters.make_id) query += `&make_id=${filters.make_id}`;
     if (filters.vehicle_model_id) query += `&vehicle_model_id=${filters.vehicle_model_id}`;
@@ -157,7 +154,6 @@ class ApiService {
     if (filters.condition) query += `&condition=${filters.condition}`;
     if (filters.min_price) query += `&min_price=${filters.min_price}`;
     if (filters.max_price) query += `&max_price=${filters.max_price}`;
-
     return this.apiCall(query);
   }
 
@@ -167,6 +163,11 @@ class ApiService {
 
   async getInspectionReport(inspectionId: number): Promise<Models.ApiResult<Models.InspectionResponse>> {
     return this.apiCall(`/admin/inspection-reports/show/${inspectionId}`);
+  }
+
+  // 🟢 NEW METHOD: Get All User Bids
+  async getUserBiddings(): Promise<Models.ApiResult<{ status: string, data: Models.Bid[] }>> {
+    return this.apiCall('/user/biddings');
   }
 
   async getAcceptedBids(): Promise<Models.ApiResult<{ status: string, data: Models.Bid[] }>> {

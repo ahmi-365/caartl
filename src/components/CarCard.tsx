@@ -1,31 +1,38 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Image,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
-  Animated
 } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Models from '../data/modal';
 
 interface CarCardProps {
   car: Models.Vehicle;
   onPress: (car: Models.Vehicle) => void;
-  variant?: 'negotiation' | 'live' | 'upcoming';
+  variant?: 'negotiation' | 'live' | 'upcoming' | 'listed';
+  isFavorite?: boolean;
+  onToggleFavorite?: () => void;
+  hideBadges?: boolean;
+  hidePrice?: boolean;
 }
 
 export const CarCard: React.FC<CarCardProps> = ({
   car,
   onPress,
   variant,
+  isFavorite = false,
+  onToggleFavorite,
+  hideBadges = false,
+  hidePrice = false,
 }) => {
   const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
 
   useEffect(() => {
-    // If negotiation, no need to run timer
-    if (variant === 'negotiation') return;
+    if (variant === 'negotiation' || variant === 'listed') return;
 
     const calculateTimeLeft = () => {
       const parseDate = (dateStr: string) => {
@@ -71,38 +78,35 @@ export const CarCard: React.FC<CarCardProps> = ({
   const variantName = car.variant || '';
   const fullTitle = `${brandName} ${modelName} ${variantName}`.trim();
 
-  // --- Dynamic Pricing Logic ---
   let leftPriceLabel = 'Starting Bid';
   let leftPriceValue = Number(car.starting_bid_amount).toLocaleString();
   let rightPriceLabel = 'Buy Now';
   let rightPriceValue = car.price ? Number(car.price).toLocaleString() : 'N/A';
-  let showLeftPrice = true; // Default to showing both
+  let showLeftPrice = true;
 
   if (variant === 'live') {
-    // Live: Current Bid vs Seller Expectation
     leftPriceLabel = 'Current Bid';
     const val = car.current_bid ? Number(car.current_bid) : Number(car.starting_bid_amount);
     leftPriceValue = val.toLocaleString();
-
     rightPriceLabel = 'Seller Expectation';
   }
   else if (variant === 'upcoming') {
-    // Upcoming: ONLY Seller Expectation
     showLeftPrice = false;
     rightPriceLabel = 'Seller Expectation';
   }
   else if (variant === 'negotiation') {
-    // Negotiation: My Highest Bid vs Seller Expectation
     leftPriceLabel = 'Highest Bid';
     leftPriceValue = car.current_bid ? Number(car.current_bid).toLocaleString() : 'N/A';
-
     rightPriceLabel = 'Seller Expectation';
   }
+  else if (variant === 'listed') {
+    showLeftPrice = false;
+    rightPriceLabel = 'Offer Price';
+    rightPriceValue = car.price ? Number(car.price).toLocaleString() : Number(car.starting_bid_amount).toLocaleString();
+  }
 
-  // Transmission Logic (1=Auto, 2=Manual)
   const transmission = car.transmission_id === 1 ? 'Automatic' : (car.transmission_id === 2 ? 'Manual' : null);
 
-  // Image Fallback Logic
   let imageUrl = 'https://c.animaapp.com/mg9397aqkN2Sch/img/tesla.png';
   if (car.cover_image) {
     if (typeof car.cover_image === 'string') {
@@ -121,21 +125,38 @@ export const CarCard: React.FC<CarCardProps> = ({
     imageUrl = car.brand.image_source;
   }
 
+  // 🟢 Conditional Styles based on variant
+  const isAuctionType = variant === 'live' || variant === 'upcoming' || variant === 'negotiation';
+  const cardStyle = [
+    styles.card,
+    !isAuctionType && styles.cardListed // Apply background/border only if NOT auction type
+  ];
+
   return (
     <View style={styles.container}>
       <TouchableOpacity activeOpacity={0.95} onPress={() => onPress(car)}>
-        <View style={styles.card}>
-          <Image
-            source={{ uri: imageUrl }}
-            style={styles.image}
-          />
-          <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.2)', 'rgba(0,0,0,1)']}
-            style={styles.gradient}
-          />
+        <View style={cardStyle}>
+          <Image source={{ uri: imageUrl }} style={styles.image} />
 
-          {/* Hide Timer if Negotiation */}
-          {variant !== 'negotiation' && (
+          <LinearGradient colors={['transparent', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.9)']} style={styles.gradient} />
+
+          {onToggleFavorite && (
+            <TouchableOpacity
+              style={styles.favButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                onToggleFavorite();
+              }}
+            >
+              <MaterialCommunityIcons
+                name={isFavorite ? "heart" : "heart-outline"}
+                size={20}
+                color={isFavorite ? "#ff4444" : "#ffffff"}
+              />
+            </TouchableOpacity>
+          )}
+
+          {variant !== 'negotiation' && variant !== 'listed' && (
             <View style={styles.countdownContainer}>
               {countdownData.map((item, index) => (
                 <View key={index} style={styles.countdownItem}>
@@ -153,67 +174,59 @@ export const CarCard: React.FC<CarCardProps> = ({
                 <Text style={styles.subtitle}>{car.year}</Text>
               </View>
 
-              <View style={styles.priceContainer}>
-                {/* Left Column (Conditional) */}
-                {showLeftPrice && (
-                  <>
-                    <View style={styles.priceColumn}>
-                      <View style={styles.priceBadge}>
-                        <Text style={styles.priceBadgeText}>{leftPriceLabel}</Text>
+              {!hidePrice && (
+                <View style={styles.priceContainer}>
+                  {showLeftPrice && (
+                    <>
+                      <View style={styles.priceColumn}>
+                        <View style={styles.priceBadge}>
+                          <Text style={styles.priceBadgeText}>{leftPriceLabel}</Text>
+                        </View>
+                        <Text style={styles.priceValue}>AED {leftPriceValue}</Text>
                       </View>
-                      <Text style={styles.priceValue}>AED {leftPriceValue}</Text>
+                      <View style={styles.divider} />
+                    </>
+                  )}
+
+                  <View style={styles.priceColumn}>
+                    <View style={styles.priceBadge}>
+                      <Text style={styles.priceBadgeText}>{rightPriceLabel}</Text>
                     </View>
-                    <View style={styles.divider} />
-                  </>
-                )}
-
-                {/* Right Column (Always Seller Expectation / Buy Now) */}
-                <View style={styles.priceColumn}>
-                  <View style={styles.priceBadge}>
-                    <Text style={styles.priceBadgeText}>{rightPriceLabel}</Text>
+                    <Text style={styles.priceValue}>AED {rightPriceValue}</Text>
                   </View>
-                  <Text style={styles.priceValue}>AED {rightPriceValue}</Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Badges Row */}
-            <View style={styles.badgeRow}>
-              {/* 1. Bids Count - ONLY FOR LIVE */}
-              {variant === 'live' && (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>
-                    {car.bids_count ? `${car.bids_count} Bids` : '0 Bids'}
-                  </Text>
                 </View>
               )}
-
-              {/* 2. Condition (New/Used) */}
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{car.condition}</Text>
-              </View>
-
-              {/* 3. Transmission */}
-              {transmission && (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{transmission}</Text>
-                </View>
-              )}
-
-              {/* 4. Mileage */}
-              {car.mileage ? (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{car.mileage} km</Text>
-                </View>
-              ) : null}
-
-              {/* 5. Engine CC */}
-              {car.engine_cc ? (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{car.engine_cc} cc</Text>
-                </View>
-              ) : null}
             </View>
+
+            {!hideBadges && (
+              <View style={styles.badgeRow}>
+                {variant === 'live' && (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>
+                      {car.bids_count ? `${car.bids_count} Bids` : '0 Bids'}
+                    </Text>
+                  </View>
+                )}
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{car.condition}</Text>
+                </View>
+                {transmission && (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>{transmission}</Text>
+                  </View>
+                )}
+                {car.mileage ? (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>{car.mileage} km</Text>
+                  </View>
+                ) : null}
+                {car.engine_cc ? (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>{car.engine_cc} cc</Text>
+                  </View>
+                ) : null}
+              </View>
+            )}
           </View>
         </View>
       </TouchableOpacity>
@@ -222,25 +235,56 @@ export const CarCard: React.FC<CarCardProps> = ({
 };
 
 const styles = StyleSheet.create({
-  container: { width: '100%', marginBottom: 24 },
-  card: { width: '100%', height: 210, borderRadius: 10, overflow: 'hidden', position: 'relative' },
-  image: { width: '100%', height: 210, },
+  container: { width: '100%', marginBottom: 15 },
+  card: {
+    width: '100%',
+    height: 220,
+    borderRadius: 16,
+    overflow: 'hidden',
+    position: 'relative',
+    // Default transparent/no border for Auctions
+  },
+  // 🟢 Specific style for 'Listed' vehicles
+  cardListed: {
+    backgroundColor: '#1A1A1A',
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  image: { width: '100%', height: '100%' },
   gradient: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+
+  favButton: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+
   countdownContainer: { position: 'absolute', top: 12, left: 14, flexDirection: 'row', gap: 4 },
   countdownItem: { width: 40, height: 40, backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
   countdownValue: { fontFamily: 'Lato', fontWeight: '700', fontSize: 16, color: '#ffffff' },
   countdownLabel: { fontFamily: 'Lato', fontSize: 10, color: '#ffffff' },
+
   titleContainer: { flex: 1, paddingRight: 10, justifyContent: 'center' },
   title: { fontFamily: 'Poppins', fontWeight: '700', fontSize: 14, color: '#ffffff', lineHeight: 20, textAlign: 'left' },
   subtitle: { fontFamily: 'Poppins', fontSize: 14, color: '#d3d3d3', marginTop: 4, textAlign: 'left', fontWeight: '500' },
-  bottomContent: { position: 'absolute', bottom: 8, left: 16, right: 16 },
+
+  bottomContent: { position: 'absolute', bottom: 12, left: 16, right: 16 },
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 10 },
+
   priceContainer: { flexDirection: 'row', gap: 6, alignItems: 'flex-end' },
   priceColumn: { alignItems: 'center' },
   priceBadge: { backgroundColor: 'rgba(255,255,255,0.35)', borderRadius: 100, paddingHorizontal: 10, paddingVertical: 4, marginBottom: 2 },
   priceBadgeText: { fontFamily: 'Poppins', fontSize: 10, color: '#ffffff', fontWeight: '600' },
-  priceValue: { fontFamily: 'Lato', fontWeight: '800', fontSize: 13, color: '#ffffff' },
+  priceValue: { fontFamily: 'Lato', fontWeight: '800', fontSize: 14, color: '#ffffff' },
   divider: { width: 1, height: 38, backgroundColor: 'rgba(255,255,255,0.2)', marginBottom: 3 },
+
   badgeRow: { flexDirection: 'row', gap: 4, flexWrap: 'wrap' },
   badge: { backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 100, paddingHorizontal: 10, paddingVertical: 4, },
   badgeText: { fontFamily: 'Poppins', fontSize: 10, color: '#ffffff', textTransform: 'capitalize' },

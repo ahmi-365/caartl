@@ -6,9 +6,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 
-// Import Home Screen
+// Import Screens
+import ListedVehiclesScreen from '../screens/ListedVehiclesScreen';
 import { HomescreenLight } from '../screens/Caartl/homescreen';
 import MyBookingsScreen from '../screens/MyBookingsScreen';
+import MyBiddingsScreen from '../screens/MyBiddingsScreen';
+import FavoritesScreen from '../screens/FavoritesScreen'; // 🟢 Importing the updated screen
 
 const Drawer = createDrawerNavigator();
 
@@ -26,27 +29,15 @@ const PaymentsScreen = () => {
     );
 };
 
-const NegotiationsScreen = () => {
-    const navigation = useNavigation();
-    return (
-        <View style={styles.placeholderContainer}>
-            <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-                <Feather name="arrow-left" size={24} color="#fff" />
-            </TouchableOpacity>
-            <Text style={styles.placeholderTitle}>Negotiations</Text>
-            <Text style={styles.placeholderSubtitle}>Coming Soon</Text>
-        </View>
-    );
-};
-
 // --- Custom Drawer Content ---
 const CustomDrawerContent = (props: DrawerContentComponentProps) => {
     const { user, logout } = useAuth();
 
-    // 1. Removed "My Bookings" from this list
     const drawerItems = [
-        { label: 'Payment Receipts', icon: 'file-text', screen: 'Payments' },
-        { label: 'Negotiations', icon: 'briefcase', screen: 'Negotiations' },
+        { label: 'Home', icon: 'home', screen: 'ListedVehicles', type: 'Feather' },
+        { label: 'My Bids', icon: 'gavel', screen: 'MyBiddings', type: 'MaterialCommunityIcons' },
+        { label: 'Favorites', icon: 'heart', screen: 'Favorites', type: 'Feather' },
+        { label: 'Payment Receipts', icon: 'file-text', screen: 'Payments', type: 'Feather' },
     ];
 
     return (
@@ -61,7 +52,11 @@ const CustomDrawerContent = (props: DrawerContentComponentProps) => {
                     {drawerItems.map((item, index) => (
                         <TouchableOpacity key={index} style={styles.drawerItem} onPress={() => props.navigation.navigate(item.screen)}>
                             <View style={styles.iconBox}>
-                                <Feather name={item.icon as any} size={18} color="#000" />
+                                {item.type === 'MaterialCommunityIcons' ? (
+                                    <MaterialCommunityIcons name={item.icon as any} size={18} color="#000" />
+                                ) : (
+                                    <Feather name={item.icon as any} size={18} color="#000" />
+                                )}
                             </View>
                             <Text style={styles.drawerLabel}>{item.label}</Text>
                             <Feather name="chevron-right" size={18} color="#444" />
@@ -92,12 +87,14 @@ export const DrawerNavigator = () => {
                 overlayColor: 'rgba(0,0,0,0.8)',
                 drawerStyle: { width: '80%', backgroundColor: '#000' },
             }}
+            initialRouteName="ListedVehicles"
         >
-            <Drawer.Screen name="HomeTab" component={HomescreenLight} />
-            {/* 🟢 Added MyBookings Here */}
+            <Drawer.Screen name="ListedVehicles" component={ListedVehiclesScreen} />
+            <Drawer.Screen name="Auctions" component={HomescreenLight} />
             <Drawer.Screen name="MyBookings" component={MyBookingsScreen} />
+            <Drawer.Screen name="MyBiddings" component={MyBiddingsScreen} />
+            <Drawer.Screen name="Favorites" component={FavoritesScreen} />
             <Drawer.Screen name="Payments" component={PaymentsScreen} />
-            <Drawer.Screen name="Negotiations" component={NegotiationsScreen} />
         </Drawer.Navigator>
     );
 };

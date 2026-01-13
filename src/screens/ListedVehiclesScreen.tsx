@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     ScrollView,
     StyleSheet,
@@ -11,7 +11,7 @@ import {
     Text,
 } from 'react-native';
 import Svg, { Path, Circle } from 'react-native-svg';
-import { useNavigation, DrawerActions } from '@react-navigation/native';
+import { useNavigation, DrawerActions, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Feather } from '@expo/vector-icons';
 
@@ -23,6 +23,7 @@ import { FilterPopup } from '../components/FilterPopup';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import apiService from '../services/ApiService';
 import * as Models from '../data/modal';
+import { useAlert } from '../context/AlertContext';
 
 type ListedScreenProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -39,12 +40,15 @@ interface FilterState {
 
 export default function ListedVehiclesScreen() {
     const navigation = useNavigation<ListedScreenProp>();
+    const { showAlert } = useAlert();
 
     const [searchText, setSearchText] = useState('');
     const [filterVisible, setFilterVisible] = useState(false);
     const [activeFilters, setActiveFilters] = useState<FilterState>({});
 
     const [vehicles, setVehicles] = useState<Models.Vehicle[]>([]);
+    const [favoriteIds, setFavoriteIds] = useState<number[]>([]);
+
     const [loading, setLoading] = useState(false);
     const [loadingMore, setLoadingMore] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
@@ -52,7 +56,28 @@ export default function ListedVehiclesScreen() {
     const [hasMore, setHasMore] = useState(true);
 
     // ------------------------------------------------------------------
-    // API Call
+    // 1. Fetch Favorites (to know status)
+    // ------------------------------------------------------------------
+    const fetchFavorites = async () => {
+        try {
+            const result = await apiService.getFavorites();
+            if (result.success && Array.isArray(result.data.data)) {
+                const ids = result.data.data.map(v => v.id);
+                setFavoriteIds(ids);
+            }
+        } catch (error) {
+            console.error("Error fetching favorites", error);
+        }
+    };
+
+    useFocusEffect(
+        useCallback(() => {
+            fetchFavorites();
+        }, [])
+    );
+
+    // ------------------------------------------------------------------
+    // 2. Fetch Listed Vehicles
     // ------------------------------------------------------------------
     const fetchListed = async (pageNumber: number, isRefresh = false, searchVal = searchText, filters = activeFilters) => {
         if (loadingMore && !isRefresh) return;
@@ -97,6 +122,7 @@ export default function ListedVehiclesScreen() {
         setRefreshing(true);
         setPage(1);
         setHasMore(true);
+        fetchFavorites(); // Refresh favs too
         fetchListed(1, true, searchText, activeFilters);
     };
 
@@ -143,8 +169,35 @@ export default function ListedVehiclesScreen() {
     const handleNotificationPress = () => alert('Notifications');
 
     const handleCarPress = (car: Models.Vehicle) => {
-        // Go to standard detail page since these are listed vehicles
         navigation.navigate('CarDetailPage', { carId: car.id });
+    };
+
+    // 🟢 Toggle Logic
+    const handleToggleFavorite = async (carId: number) => {
+        // Optimistic Update
+        const isCurrentlyFav = favoriteIds.includes(carId);
+        let newIds = [...favoriteIds];
+        if (isCurrentlyFav) {
+            newIds = newIds.filter(id => id !== carId);
+        } else {
+            newIds.push(carId);
+        }
+        setFavoriteIds(newIds);
+
+        try {
+            const result = await apiService.toggleFavorite(carId);
+            if (!result.success) {
+                // Revert if failed
+                setFavoriteIds(favoriteIds);
+                showAlert('Error', 'Failed to update favorite status');
+            } else {
+                // Optional: Sync with backend response if needed
+                // setIsFavorited(result.data.is_favorited)
+            }
+        } catch (error) {
+            setFavoriteIds(favoriteIds);
+            console.error(error);
+        }
     };
 
     const activeFilterKeys = Object.entries(activeFilters).filter(([key, val]) => {
@@ -163,7 +216,9 @@ export default function ListedVehiclesScreen() {
                     <CarCard
                         car={item}
                         onPress={handleCarPress}
-                        variant="upcoming" // Use 'upcoming' style (shows seller expectation/price) but without timer logic
+                        variant="listed"
+                        isFavorite={favoriteIds.includes(item.id)}
+                        onToggleFavorite={() => handleToggleFavorite(item.id)}
                     />
                 )}
                 contentContainerStyle={styles.listContent}
@@ -175,10 +230,6 @@ export default function ListedVehiclesScreen() {
                 }
                 ListHeaderComponent={
                     <>
-                        <View style={styles.headerTitleContainer}>
-                            <Text style={styles.headerTitle}>Home</Text>
-                        </View>
-
                         <View style={styles.searchContainer}>
                             <View style={styles.searchBar}>
                                 <Svg width="24" height="24" viewBox="0 0 24 24" fill="none"><Circle cx="11" cy="11" r="8" stroke="#8c9199" strokeWidth="2" /><Path d="M21 21L16.65 16.65" stroke="#8c9199" strokeWidth="2" strokeLinecap="round" /></Svg>
@@ -231,7 +282,6 @@ export default function ListedVehiclesScreen() {
                             </View>
                         )}
 
-                        {/* Spacing since we removed tabs */}
                         <View style={{ marginBottom: 15 }} />
                     </>
                 }
@@ -262,8 +312,6 @@ export default function ListedVehiclesScreen() {
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#000000' },
     listContent: { paddingTop: 80, paddingHorizontal: 26 },
-    headerTitleContainer: { marginBottom: 15 },
-    headerTitle: { color: '#cadb2a', fontSize: 24, fontFamily: 'Poppins', fontWeight: 'bold' },
     searchContainer: { marginBottom: 15 },
     searchBar: { height: 49, backgroundColor: '#edeeef', borderRadius: 10, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, justifyContent: 'space-between' },
     searchInput: { flex: 1, fontFamily: 'Poppins', fontSize: 14, color: '#000000', marginHorizontal: 12 },
