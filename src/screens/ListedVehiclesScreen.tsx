@@ -17,6 +17,7 @@ import { Feather } from '@expo/vector-icons';
 
 // Imports
 import { CarCard } from '../components/CarCard';
+import { ShimmerCarCard } from '../components/ShimmerCarCard';
 import { TopBar } from '../components/TopBar';
 import { BottomNav } from '../components/BottomNavigation';
 import { FilterPopup } from '../components/FilterPopup';
@@ -41,6 +42,8 @@ interface FilterState {
 export default function ListedVehiclesScreen() {
     const navigation = useNavigation<ListedScreenProp>();
     const { showAlert } = useAlert();
+    const { user } = require('../context/AuthContext').useAuth();
+    const [showLoginAlert, setShowLoginAlert] = useState(false);
 
     const [searchText, setSearchText] = useState('');
     const [filterVisible, setFilterVisible] = useState(false);
@@ -174,6 +177,10 @@ export default function ListedVehiclesScreen() {
 
     // 🟢 Toggle Logic
     const handleToggleFavorite = async (carId: number) => {
+        if (user && user.id === 0) {
+            setShowLoginAlert(true);
+            return;
+        }
         // Optimistic Update
         const isCurrentlyFav = favoriteIds.includes(carId);
         let newIds = [...favoriteIds];
@@ -205,107 +212,124 @@ export default function ListedVehiclesScreen() {
     });
     const hasActiveFilters = searchText.length > 0 || activeFilterKeys.length > 0;
 
+    const CustomAlert = require('../components/ui/CustomAlert').default;
     return (
-        <View style={styles.container}>
-            <TopBar onMenuPress={handleMenuPress} onNotificationPress={handleNotificationPress} />
+        <>
+            <View style={styles.container}>
+                <TopBar onMenuPress={handleMenuPress} onNotificationPress={handleNotificationPress} />
 
-            <FlatList
-                data={vehicles}
-                keyExtractor={(item) => item.id.toString()}
-                renderItem={({ item }) => (
-                    <CarCard
-                        car={item}
-                        onPress={handleCarPress}
-                        variant="listed"
-                        isFavorite={favoriteIds.includes(item.id)}
-                        onToggleFavorite={() => handleToggleFavorite(item.id)}
+                {loading ? (
+                    <View style={{ paddingTop: 80, paddingHorizontal: 26 }}>
+                        {[...Array(4)].map((_, idx) => (
+                            <ShimmerCarCard key={idx} />
+                        ))}
+                    </View>
+                ) : (
+                    <FlatList
+                        data={vehicles}
+                        keyExtractor={(item) => item.id.toString()}
+                        renderItem={({ item }) => (
+                            <CarCard
+                                car={item}
+                                onPress={handleCarPress}
+                                variant="listed"
+                                isFavorite={favoriteIds.includes(item.id)}
+                                onToggleFavorite={() => handleToggleFavorite(item.id)}
+                            />
+                        )}
+                        contentContainerStyle={styles.listContent}
+                        showsVerticalScrollIndicator={false}
+                        onEndReached={handleLoadMore}
+                        onEndReachedThreshold={0.5}
+                        refreshControl={
+                            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#cadb2a" />
+                        }
+                        ListHeaderComponent={
+                            <>
+                                <View style={styles.searchContainer}>
+                                    <View style={styles.searchBar}>
+                                        <Svg width="24" height="24" viewBox="0 0 24 24" fill="none"><Circle cx="11" cy="11" r="8" stroke="#8c9199" strokeWidth="2" /><Path d="M21 21L16.65 16.65" stroke="#8c9199" strokeWidth="2" strokeLinecap="round" /></Svg>
+                                        <TextInput
+                                            placeholder="Search vehicles..."
+                                            placeholderTextColor="#8c9199"
+                                            style={styles.searchInput}
+                                            value={searchText}
+                                            onChangeText={setSearchText}
+                                            onSubmitEditing={handleSearchSubmit}
+                                            returnKeyType="search"
+                                        />
+                                        <TouchableOpacity onPress={() => setFilterVisible(true)}>
+                                            <Svg width="24" height="24" viewBox="0 0 24 24" fill="none"><Path d="M14 17H5" stroke="#8c9199" strokeWidth={2} strokeLinecap="round" /><Path d="M19 7h-9" stroke="#8c9199" strokeWidth={2} strokeLinecap="round" /><Circle cx={17} cy={17} r={3} stroke="#8c9199" strokeWidth={2} /><Circle cx={7} cy={7} r={3} stroke="#8c9199" strokeWidth={2} /></Svg>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+
+                                {/* Active Filters Section */}
+                                {hasActiveFilters && (
+                                    <View style={styles.activeFiltersContainer}>
+                                        <TouchableOpacity onPress={clearAllFilters} style={styles.clearAllButton}>
+                                            <Text style={styles.clearAllText}>Clear All</Text>
+                                        </TouchableOpacity>
+
+                                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
+                                            {searchText ? (
+                                                <View style={styles.filterChip}>
+                                                    <Text style={styles.filterChipText}>"{searchText}"</Text>
+                                                    <TouchableOpacity onPress={() => { setSearchText(''); handleSearchSubmit(); }}>
+                                                        <Feather name="x" size={14} color="#000" style={{ marginLeft: 4 }} />
+                                                    </TouchableOpacity>
+                                                </View>
+                                            ) : null}
+
+                                            {activeFilterKeys.map(([key, value]) => {
+                                                let label = key.replace('_', ' ');
+                                                label = label.charAt(0).toUpperCase() + label.slice(1);
+                                                let displayValue = value;
+                                                return (
+                                                    <View key={key} style={styles.filterChip}>
+                                                        <Text style={styles.filterChipText}>{label}: {displayValue}</Text>
+                                                        <TouchableOpacity onPress={() => removeFilter(key as keyof FilterState)}>
+                                                            <Feather name="x" size={14} color="#000" style={{ marginLeft: 4 }} />
+                                                        </TouchableOpacity>
+                                                    </View>
+                                                );
+                                            })}
+                                        </ScrollView>
+                                    </View>
+                                )}
+
+                                <View style={{ marginBottom: 15 }} />
+                            </>
+                        }
+                        ListFooterComponent={
+                            loadingMore ? <ActivityIndicator size="small" color="#cadb2a" style={{ marginVertical: 20 }} /> : <View style={{ height: 100 }} />
+                        }
+                        ListEmptyComponent={
+                            !loading ? (
+                                <View style={styles.emptyState}>
+                                    <Text style={styles.emptyStateText}>No Vehicles Found.</Text>
+                                </View>
+                            ) : null
+                        }
                     />
                 )}
-                contentContainerStyle={styles.listContent}
-                showsVerticalScrollIndicator={false}
-                onEndReached={handleLoadMore}
-                onEndReachedThreshold={0.5}
-                refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#cadb2a" />
-                }
-                ListHeaderComponent={
-                    <>
-                        <View style={styles.searchContainer}>
-                            <View style={styles.searchBar}>
-                                <Svg width="24" height="24" viewBox="0 0 24 24" fill="none"><Circle cx="11" cy="11" r="8" stroke="#8c9199" strokeWidth="2" /><Path d="M21 21L16.65 16.65" stroke="#8c9199" strokeWidth="2" strokeLinecap="round" /></Svg>
-                                <TextInput
-                                    placeholder="Search vehicles..."
-                                    placeholderTextColor="#8c9199"
-                                    style={styles.searchInput}
-                                    value={searchText}
-                                    onChangeText={setSearchText}
-                                    onSubmitEditing={handleSearchSubmit}
-                                    returnKeyType="search"
-                                />
-                                <TouchableOpacity onPress={() => setFilterVisible(true)}>
-                                    <Svg width="24" height="24" viewBox="0 0 24 24" fill="none"><Path d="M14 17H5" stroke="#8c9199" strokeWidth={2} strokeLinecap="round" /><Path d="M19 7h-9" stroke="#8c9199" strokeWidth={2} strokeLinecap="round" /><Circle cx={17} cy={17} r={3} stroke="#8c9199" strokeWidth={2} /><Circle cx={7} cy={7} r={3} stroke="#8c9199" strokeWidth={2} /></Svg>
-                                </TouchableOpacity>
-                            </View>
-                        </View>
 
-                        {/* Active Filters Section */}
-                        {hasActiveFilters && (
-                            <View style={styles.activeFiltersContainer}>
-                                <TouchableOpacity onPress={clearAllFilters} style={styles.clearAllButton}>
-                                    <Text style={styles.clearAllText}>Clear All</Text>
-                                </TouchableOpacity>
+                <FilterPopup
+                    visible={filterVisible}
+                    onClose={() => setFilterVisible(false)}
+                    onApply={applyFilters}
+                    currentFilters={activeFilters}
+                />
 
-                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
-                                    {searchText ? (
-                                        <View style={styles.filterChip}>
-                                            <Text style={styles.filterChipText}>"{searchText}"</Text>
-                                            <TouchableOpacity onPress={() => { setSearchText(''); handleSearchSubmit(); }}>
-                                                <Feather name="x" size={14} color="#000" style={{ marginLeft: 4 }} />
-                                            </TouchableOpacity>
-                                        </View>
-                                    ) : null}
-
-                                    {activeFilterKeys.map(([key, value]) => {
-                                        let label = key.replace('_', ' ');
-                                        label = label.charAt(0).toUpperCase() + label.slice(1);
-                                        let displayValue = value;
-                                        return (
-                                            <View key={key} style={styles.filterChip}>
-                                                <Text style={styles.filterChipText}>{label}: {displayValue}</Text>
-                                                <TouchableOpacity onPress={() => removeFilter(key as keyof FilterState)}>
-                                                    <Feather name="x" size={14} color="#000" style={{ marginLeft: 4 }} />
-                                                </TouchableOpacity>
-                                            </View>
-                                        );
-                                    })}
-                                </ScrollView>
-                            </View>
-                        )}
-
-                        <View style={{ marginBottom: 15 }} />
-                    </>
-                }
-                ListFooterComponent={
-                    loadingMore ? <ActivityIndicator size="small" color="#cadb2a" style={{ marginVertical: 20 }} /> : <View style={{ height: 100 }} />
-                }
-                ListEmptyComponent={
-                    !loading ? (
-                        <View style={styles.emptyState}>
-                            <Text style={styles.emptyStateText}>No Vehicles Found.</Text>
-                        </View>
-                    ) : null
-                }
+                <BottomNav />
+            </View>
+            <CustomAlert
+                visible={showLoginAlert}
+                title="Please Login"
+                message="Create an account or login to Caartl to use all features."
+                onClose={() => setShowLoginAlert(false)}
             />
-
-            <FilterPopup
-                visible={filterVisible}
-                onClose={() => setFilterVisible(false)}
-                onApply={applyFilters}
-                currentFilters={activeFilters}
-            />
-
-            <BottomNav />
-        </View>
+        </>
     );
 }
 

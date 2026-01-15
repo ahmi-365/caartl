@@ -37,6 +37,7 @@ interface Booking {
         title: string;
         year: number;
         mileage: number;
+        is_auction?: boolean | null;
         cover_image?: any;
         images?: any[];
         brand?: { name: string; image_source: string };
@@ -131,14 +132,26 @@ export default function MyBookingsScreen() {
         const modelName = vehicle.vehicle_model?.name || '';
         const title = vehicle.title || `${brandName} ${modelName}`;
 
+        const handleCardPress = () => {
+            // If is_auction is true, navigate to negotiation
+            if (vehicle.is_auction === true) {
+                navigation.navigate('LiveAuction', {
+                    carId: vehicle.id,
+                    viewType: 'negotiation'
+                });
+            } else {
+                // If is_auction is null or false, navigate to car details page
+                navigation.navigate('CarDetailPage', {
+                    carId: vehicle.id
+                });
+            }
+        };
+
         return (
             <TouchableOpacity
                 activeOpacity={0.9}
                 style={styles.card}
-                onPress={() => navigation.navigate('LiveAuction', {
-                    carId: vehicle.id,
-                    viewType: 'negotiation'
-                })}
+                onPress={handleCardPress}
             >
                 <View style={styles.cardInner}>
                     <Image source={{ uri: getImageUrl(vehicle) }} style={styles.image} resizeMode="cover" />
@@ -210,9 +223,9 @@ const styles = StyleSheet.create({
         paddingTop: 100, // Space for TopBar
         paddingBottom: 100 // Space for BottomNav
     },
-    card: { backgroundColor: '#111', borderRadius: 16, marginBottom: 16, borderWidth: 1, borderColor: '#222', overflow: 'hidden' },
+    card: { backgroundColor: '#111', borderRadius: 10, marginBottom: 16, borderWidth: 1, borderColor: '#222', overflow: 'hidden' },
     cardInner: { flexDirection: 'row' },
-    image: { width: 110, height: 110, resizeMode: 'cover' },
+    image: { width: 140, height: 130, resizeMode: 'cover' },
     infoContainer: { flex: 1, padding: 12, justifyContent: 'space-between' },
     headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
     title: { fontSize: 15, fontWeight: 'bold', color: '#fff', fontFamily: 'Poppins', flex: 1, marginRight: 8 },

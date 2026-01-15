@@ -97,7 +97,7 @@ export default function FavoritesScreen() {
   return (
     <View style={styles.container}>
       {/* Custom Header with Round Back Button */}
-      <View style={[styles.customHeader, { paddingTop: insets.top + 10 }]}>
+      <View style={[styles.customHeader, { paddingTop: 10 }]}>
         <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
           <Feather name="arrow-left" size={24} color="#fff" />
         </TouchableOpacity>

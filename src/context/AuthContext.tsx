@@ -11,6 +11,7 @@ interface AuthContextType {
     register: (userData: any) => Promise<boolean>;
     logout: () => void;
     updateUser: (user: Models.User) => void;
+    guestLogin: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
@@ -98,6 +99,32 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         await AsyncStorage.setItem('userData', JSON.stringify(newUser));
     };
 
+    // 🟢 ADD: Guest login method
+    const guestLogin = async () => {
+        const guestUser: Models.User = {
+            id: 0, // 0 for guest
+            agent_id: null,
+            is_approved: 0,
+            name: 'Guest',
+            email: '',
+            email_verified_at: null,
+            bio: null,
+            phone: '',
+            photo: null,
+            target: null,
+            created_at: '',
+            updated_at: '',
+            roles: ['guest'],
+            role: 'guest',
+            permissions: [],
+            package_id: null,
+        };
+        setUserToken(null);
+        setUser(guestUser);
+        await AsyncStorage.setItem('userData', JSON.stringify(guestUser));
+        await AsyncStorage.removeItem('userToken');
+    };
+
     const value = {
         userToken,
         user,
@@ -106,6 +133,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         register,
         logout,
         updateUser,
+        guestLogin,
     };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

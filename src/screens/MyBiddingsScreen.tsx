@@ -178,7 +178,7 @@ export default function MyBiddingsScreen() {
         <View style={styles.container}>
             <LinearGradient colors={['#000000', '#1a1a00']} style={styles.container}>
 
-                <View style={[styles.customHeader, { paddingTop: insets.top + 10 }]}>
+                <View style={[styles.customHeader, { paddingTop: 10 }]}>
                     <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
                         <Feather name="arrow-left" size={24} color="#fff" />
                     </TouchableOpacity>

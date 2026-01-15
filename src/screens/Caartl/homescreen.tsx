@@ -16,6 +16,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 // Imports
 import { CarCard } from '../../components/CarCard';
+import { ShimmerCarCard } from '../../components/ShimmerCarCard';
 import { TopBar } from '../../components/TopBar';
 import { BottomNav } from '../../components/BottomNavigation';
 import { FilterPopup } from '../../components/FilterPopup';
@@ -238,15 +239,16 @@ export const HomescreenLight = () => {
     <View style={styles.container}>
       <TopBar onMenuPress={handleMenuPress} onNotificationPress={handleNotificationPress} />
 
+
+      {/* Always show search, filters, and tabs. Only shimmer the card list area below. */}
       <FlatList
-        data={displayData}
-        keyExtractor={(item) => item.id.toString()}
+        data={loading ? [] : displayData}
+        keyExtractor={(item) => item.id?.toString?.() ?? Math.random().toString()}
         renderItem={({ item }) => (
           <CarCard
             car={item}
             onPress={handleCarPress}
             variant={activeTab === 'negotiations' ? 'negotiation' : activeTab}
-          // Favorites props removed
           />
         )}
         contentContainerStyle={styles.listContent}
@@ -329,6 +331,14 @@ export const HomescreenLight = () => {
                 </TouchableOpacity>
               ))}
             </View>
+            {/* 🟢 Shimmer skeletons only below tabs/listing area */}
+            {loading && (
+              <View style={{ marginTop: 10, paddingBottom: 100 }}>
+                {[1, 2, 3, 4].map((_, idx) => (
+                  <ShimmerCarCard key={idx} />
+                ))}
+              </View>
+            )}
           </>
         }
 

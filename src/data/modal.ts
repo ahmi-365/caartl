@@ -330,3 +330,40 @@ export interface ApiResult<T> {
     status: number;
     data: T;
 }
+
+export interface UserPreference {
+    id: number;
+    user_id: number;
+    name: string;
+    price_from: string | number | null;
+    price_to: string | number | null;
+    year_form: string | number | null; // Matches API typo 'form' instead of 'from'
+    year_to: string | number | null;
+    mileage_form: string | number | null; // Matches API typo
+    mileage_to: string | number | null;
+    make: string | string[] | null; // Can be string "Toyota" or array
+    model: string | null;
+    body_type: string | null;
+    specs: any; // Can be object or array
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface Invoice {
+    id: number;
+    type: string; // 'booking' | 'package'
+    booking_id: number | null;
+    user_id: number;
+    pdf_link: string | null;
+    payment_slip: string | null;
+    status: 'pending' | 'paid' | 'verified' | 'delivered' | string;
+    created_at: string;
+    updated_at: string;
+    booking?: {
+        id: number;
+        total_amount: string;
+        vehicle?: Vehicle;
+    };
+    user?: User;
+}

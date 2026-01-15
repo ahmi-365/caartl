@@ -17,9 +17,18 @@ import ProfileScreen from '../screens/ProfileScreen';
 import EditProfileScreen from '../screens/EditProfileScreen';
 import BiddingDetailScreen from '../screens/BiddingDetailScreen';
 import BookCarScreen from '../screens/BookCarScreen';
-import MyBookingsScreen from '../screens/MyBookingsScreen';
+// MyBookings is in Drawer now
 import ViewBookingScreen from '../screens/ViewBookingScreen';
-import MyBiddingsScreen from '../screens/MyBiddingsScreen'; // 🟢 NEW IMPORT
+import MyBiddingsScreen from '../screens/MyBiddingsScreen';
+import PreferencesListScreen from '../screens/PreferencesListScreen';
+import ManagePreferenceScreen from '../screens/ManagePreferenceScreen';
+import PaymentReceiptsScreen from '../screens/PaymentReceiptsScreen';
+import InvoiceDetailScreen from '../screens/InvoiceDetailScreen';
+import SellCarInquiryScreen from '../screens/SellCarInquiryScreen';
+import AppointmentInquiryScreen from '../screens/AppointmentInquiryScreen';
+import ContactInquiryScreen from '../screens/ContactInquiryScreen';
+import InquiryTypeScreen from '../screens/InquiryTypeScreen';
+// Auctions (HomescreenLight) is in Drawer now
 
 // Navigator
 import { DrawerNavigator } from './DrawerNavigator';
@@ -27,18 +36,27 @@ import { DrawerNavigator } from './DrawerNavigator';
 export type RootStackParamList = {
   Login: undefined;
   Register: undefined;
-  DrawerRoot: undefined;
+  DrawerRoot: undefined; // Contains ListedVehicles, Auctions, MyBookings
   FavoritesScreen: undefined;
   ProfileScreen: undefined;
   EditProfile: undefined;
   CarDetailPage: { carId: number };
   LiveAuction: { carId: number; viewType?: 'live' | 'negotiation' | 'upcoming' };
+  // Auctions removed from stack
   BiddingDetail: { vehicleId: number };
   ChangePassword: undefined;
   BookCar: { vehicle: any };
-  MyBookings: undefined;
+  // MyBookings removed from stack
   ViewBooking: { vehicleId: number };
-  MyBiddings: undefined; // 🟢 NEW TYPE
+  MyBiddings: undefined;
+  PreferencesList: undefined;
+  ManagePreference: { preferenceId?: number; preferenceData?: any };
+  Payments: undefined;
+  InvoiceDetail: { invoice: any };
+  InquiryType: undefined;
+  SellCarInquiry: undefined;
+  AppointmentInquiry: undefined;
+  ContactInquiry: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -59,6 +77,8 @@ const AuthStack = () => (
       headerShown: false,
       contentStyle: { backgroundColor: '#000' },
       animation: 'slide_from_right',
+      gestureEnabled: true,
+      gestureDirection: 'horizontal',
     }}
   >
     <Stack.Screen name="Login" component={LoginScreen} />
@@ -82,59 +102,62 @@ const MainAppStack = () => {
         screenOptions={{
           headerShown: false,
           contentStyle: { backgroundColor: '#000' },
-          animation: 'slide_from_right',
         }}
       >
-        {/* Tab Screens (Fade Animation) */}
-        <Stack.Screen
-          name="DrawerRoot"
-          component={DrawerNavigator}
-          options={{ animation: 'fade' }}
-        />
-        <Stack.Screen
-          name="FavoritesScreen"
-          component={FavoritesScreen}
-          options={{ animation: 'fade' }}
-        />
-        <Stack.Screen
-          name="ProfileScreen"
-          component={ProfileScreen}
-          options={{ animation: 'fade' }}
-        />
-        <Stack.Screen
-          name="MyBookings"
-          component={MyBookingsScreen}
-          options={{ animation: 'fade' }}
-        />
-        <Stack.Screen
-          name="MyBiddings"
-          component={MyBiddingsScreen} // 🟢 NEW SCREEN
-          options={{ animation: 'fade' }}
-        />
+        {/* 🟢 GROUP 1: Main Tabs / Drawer Root (Fade Animation) */}
+        <Stack.Group screenOptions={{ animation: 'fade' }}>
+          <Stack.Screen name="DrawerRoot" component={DrawerNavigator} />
+          <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
+        </Stack.Group>
 
-        {/* Inner Screens (Slide Animation) */}
-        <Stack.Screen name="EditProfile" component={EditProfileScreen} />
-        <Stack.Screen name="CarDetailPage" component={CarDetailPage} />
-        <Stack.Screen name="LiveAuction" component={LiveCarAuctionScreen} />
-        <Stack.Screen name="BiddingDetail" component={BiddingDetailScreen} />
-        <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
-        <Stack.Screen name="BookCar" component={BookCarScreen} />
-        <Stack.Screen name="ViewBooking" component={ViewBookingScreen} />
+        {/* 🟢 GROUP 2: Inner Screens / Details (Slide Animation) */}
+        <Stack.Group
+          screenOptions={{
+            animation: 'slide_from_right',
+            gestureEnabled: true,
+            gestureDirection: 'horizontal'
+          }}
+        >
+          {/* Drawer Items handled as stack for animation */}
+          <Stack.Screen name="FavoritesScreen" component={FavoritesScreen} />
+          <Stack.Screen name="MyBiddings" component={MyBiddingsScreen} />
+          <Stack.Screen name="Payments" component={PaymentReceiptsScreen} />
+
+          {/* Features */}
+          <Stack.Screen name="InquiryType" component={InquiryTypeScreen} />
+          <Stack.Screen name="SellCarInquiry" component={SellCarInquiryScreen} />
+          <Stack.Screen name="AppointmentInquiry" component={AppointmentInquiryScreen} />
+          <Stack.Screen name="ContactInquiry" component={ContactInquiryScreen} />
+
+          {/* Details */}
+          <Stack.Screen name="EditProfile" component={EditProfileScreen} />
+          <Stack.Screen name="CarDetailPage" component={CarDetailPage} />
+          <Stack.Screen name="LiveAuction" component={LiveCarAuctionScreen} />
+          <Stack.Screen name="BiddingDetail" component={BiddingDetailScreen} />
+          <Stack.Screen name="BookCar" component={BookCarScreen} />
+          <Stack.Screen name="ViewBooking" component={ViewBookingScreen} />
+          <Stack.Screen name="PreferencesList" component={PreferencesListScreen} />
+          <Stack.Screen name="ManagePreference" component={ManagePreferenceScreen} />
+          <Stack.Screen name="InvoiceDetail" component={InvoiceDetailScreen} />
+
+          <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
+        </Stack.Group>
       </Stack.Navigator>
     </View>
   );
 };
 
 const AppNavigator = () => {
-  const { isLoading, userToken } = useAuth();
+  const { isLoading, userToken, user } = useAuth();
 
   if (isLoading) {
     return <SplashScreenDark />;
   }
 
+  const isGuest = user && user.id === 0;
   return (
     <NavigationContainer theme={MyDarkTheme}>
-      {userToken ? <MainAppStack /> : <AuthStack />}
+      {userToken || isGuest ? <MainAppStack /> : <AuthStack />}
     </NavigationContainer>
   );
 };

@@ -22,6 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import apiService from '../services/ApiService';
 import * as Models from '../data/modal';
 import { useAlert } from '../context/AlertContext';
+import { useAuth } from '../context/AuthContext';
 import { RootStackParamList } from '../navigation/AppNavigator';
 
 type BookCarRouteProp = RouteProp<RootStackParamList, 'BookCar'>;
@@ -33,6 +34,8 @@ export default function BookCarScreen() {
     const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
     const route = useRoute<BookCarRouteProp>();
     const insets = useSafeAreaInsets();
+
+    const { user } = useAuth();
 
     const vehicle = route.params?.vehicle || null;
     const { showAlert } = useAlert();
@@ -49,15 +52,15 @@ export default function BookCarScreen() {
     const [currentStep, setCurrentStep] = useState(1);
     const [selectedServices, setSelectedServices] = useState<number[]>([]);
 
-    // Delivery State (Updated to 'door_delivery')
+    // Delivery State
     const [deliveryType, setDeliveryType] = useState<'door_delivery' | 'pickup'>('door_delivery');
     const [selectedCity, setSelectedCity] = useState<Models.ServiceLocation | null>(null);
     const [address, setAddress] = useState('');
 
-    // Contact Inputs
-    const [receiverName, setReceiverName] = useState('');
-    const [receiverEmail, setReceiverEmail] = useState('');
-    const [receiverPhone, setReceiverPhone] = useState('');
+    // Contact Inputs - Prefilled
+    const [receiverName, setReceiverName] = useState(user?.name || '');
+    const [receiverEmail, setReceiverEmail] = useState(user?.email || '');
+    const [receiverPhone, setReceiverPhone] = useState(user?.phone || '');
 
     // Validation State
     const [errors, setErrors] = useState({
@@ -154,7 +157,6 @@ export default function BookCarScreen() {
         if (currentStep === 1) {
             setCurrentStep(2);
         } else if (currentStep === 2) {
-            // Check door_delivery validation
             if (deliveryType === 'door_delivery' && !selectedCity) {
                 newErrors.city = "Please select a delivery city.";
                 valid = false;
@@ -181,7 +183,6 @@ export default function BookCarScreen() {
             const formData = new FormData();
             formData.append('vehicle_id', String(vehicle.id));
 
-            // Updated to use door_delivery
             formData.append('delivery_type', deliveryType === 'door_delivery' ? 'door_delivery' : 'self_pickup');
             formData.append('delivery_charges', String(deliveryCharge));
 
@@ -226,11 +227,10 @@ export default function BookCarScreen() {
 
             if (result.success) {
                 showAlert("Success", "Booking submitted successfully!");
-                // 🟢 UPDATED: Navigate back to LiveAuction to show "Pending Confirmation" status
                 navigation.reset({
-                    index: 1, // Determines which screen is active (0 = DrawerRoot, 1 = LiveAuction)
+                    index: 1,
                     routes: [
-                        { name: 'DrawerRoot' }, // Keep Home in stack history
+                        { name: 'DrawerRoot' },
                         {
                             name: 'LiveAuction',
                             params: {
@@ -335,7 +335,6 @@ export default function BookCarScreen() {
                 <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
                     {vehicle && (
                         <View style={styles.vehicleCard}>
-                            {/* 🟢 FIX: Updated image helper usage */}
                             <Image source={{ uri: getImageUrl(vehicle.cover_image) }} style={styles.vehicleImage} />
                             <View style={styles.vehicleInfo}>
                                 <Text style={styles.vehicleTitle} numberOfLines={1}>{vehicle.title}</Text>
@@ -407,6 +406,17 @@ export default function BookCarScreen() {
                                 <Text style={styles.radioText}>Self Pick Up</Text>
                                 <View><Text style={styles.radioPrice}>AED 0</Text><Text style={styles.radioSub}>Total Charges</Text></View>
                             </TouchableOpacity>
+
+                            {/* 🟢 NEW: Show Pickup Location if available */}
+                            {deliveryType === 'pickup' && vehicle?.pickup_location && (
+                                <View style={{ marginBottom: 15 }}>
+                                    <Text style={styles.inputLabel}>Pickup Location</Text>
+                                    <View style={styles.readOnlyBox}>
+                                        <Feather name="map-pin" size={20} color="#cadb2a" style={{ marginRight: 10 }} />
+                                        <Text style={styles.readOnlyText}>{vehicle.pickup_location}</Text>
+                                    </View>
+                                </View>
+                            )}
 
                             <Text style={[styles.sectionTitle, { marginTop: 20, marginBottom: 10, color: '#fff' }]}>Contact Info</Text>
                             <View style={styles.inputGroup}><Text style={styles.inputLabel}>Receiver Name</Text><View style={styles.inputBox}><TextInput style={styles.textInput} placeholder="Enter Receiver Name" placeholderTextColor="#666" value={receiverName} onChangeText={(text) => { setReceiverName(text); if (text.trim()) setErrors(prev => ({ ...prev, name: '' })); }} /></View>{errors.name ? <Text style={styles.errorText}>{errors.name}</Text> : null}</View>
@@ -500,6 +510,11 @@ const styles = StyleSheet.create({
     inputLabel: { fontSize: 14, color: '#cadb2a', marginBottom: 8, marginTop: 10, fontFamily: 'Poppins' },
     inputBox: { backgroundColor: '#111', borderWidth: 1, borderColor: '#222', borderRadius: 8, paddingHorizontal: 15, height: 50, flexDirection: 'row', alignItems: 'center' },
     textInput: { flex: 1, color: '#fff', fontFamily: 'Poppins', height: '100%' },
+
+    // 🟢 New ReadOnly Styles for Pickup
+    readOnlyBox: { backgroundColor: '#181818', borderWidth: 1, borderColor: '#333', borderRadius: 8, paddingHorizontal: 15, height: 50, flexDirection: 'row', alignItems: 'center' },
+    readOnlyText: { color: '#ccc', fontFamily: 'Poppins', fontSize: 14, marginLeft: 10 },
+
     inputGroup: { marginBottom: 5 },
     errorText: { color: '#ff4444', fontSize: 12, marginTop: 5, marginLeft: 5, fontFamily: 'Poppins' },
     uploadCard: { marginBottom: 15, backgroundColor: '#111', borderRadius: 12, borderWidth: 1, borderColor: '#666', borderStyle: 'dashed' },

@@ -3,7 +3,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Models from '../data/modal';
 
-// Define interface for filter parameters
 export interface AuctionFilters {
   search?: string;
   make?: string;
@@ -16,7 +15,6 @@ export interface AuctionFilters {
   max_price?: number;
 }
 
-// API Configuration
 class ApiService {
   baseURL: string;
 
@@ -72,7 +70,7 @@ class ApiService {
     }
   }
 
-  // ... (Existing methods) ...
+  // ... (Existing GET methods) ...
 
   async getLocations(): Promise<Models.ApiResult<{ data: Models.ServiceLocation[] }>> {
     return this.apiCall('/services-locations?type=location');
@@ -85,6 +83,8 @@ class ApiService {
   async getVehicleDetails(id: number): Promise<Models.ApiResult<{ status: string, data: Models.Vehicle }>> {
     return this.apiCall(`/admin/vehicles/show/${id}`);
   }
+
+  // ... (Auth methods) ...
 
   async register(userData: any): Promise<Models.ApiResult<Models.RegisterResponse>> {
     return this.apiCall('/register', { method: 'POST', body: JSON.stringify(userData) });
@@ -118,16 +118,13 @@ class ApiService {
     return this.apiCall('/favorites');
   }
 
-  // ===================================
-  // AUCTION APIs
-  // ===================================
+  // ... (Auction/Bid methods) ...
 
   async getAuctions(
     perPage: number = 10,
     page: number = 1,
     filters: AuctionFilters = {}
   ): Promise<Models.ApiResult<Models.ApiResponse<Models.PaginatedResponse<Models.Vehicle>>>> {
-
     let query = `/auctions?per_page=${perPage}&page=${page}`;
     if (filters.search) query += `&search=${encodeURIComponent(filters.search)}`;
     if (filters.make) query += `&make=${encodeURIComponent(filters.make)}`;
@@ -138,7 +135,6 @@ class ApiService {
     if (filters.condition) query += `&condition=${filters.condition}`;
     if (filters.min_price) query += `&min_price=${filters.min_price}`;
     if (filters.max_price) query += `&max_price=${filters.max_price}`;
-
     return this.apiCall(query);
   }
 
@@ -165,7 +161,6 @@ class ApiService {
     return this.apiCall(`/admin/inspection-reports/show/${inspectionId}`);
   }
 
-  // 🟢 NEW METHOD: Get All User Bids
   async getUserBiddings(): Promise<Models.ApiResult<{ status: string, data: Models.Bid[] }>> {
     return this.apiCall('/user/biddings');
   }
@@ -216,6 +211,133 @@ class ApiService {
       console.error('API call error to /bookings/book-now:', error);
       return { success: false, status: 0, data: { message: 'Network error.' } };
     }
+  }
+
+  async inquireCar(formData: FormData): Promise<Models.ApiResult<any>> {
+    const url = `${this.baseURL}/buy-car`;
+    const token = await this.getToken();
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: formData,
+      });
+      const data = await response.json();
+      return { success: response.ok, status: response.status, data };
+    } catch (error) {
+      console.error('API call error to /buy-car:', error);
+      return { success: false, status: 0, data: { message: 'Network error.' } };
+    }
+  }
+
+  async sellCar(formData: FormData): Promise<Models.ApiResult<any>> {
+    const url = `${this.baseURL}/sell-car`;
+    const token = await this.getToken();
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: formData,
+      });
+      const data = await response.json();
+      return { success: response.ok, status: response.status, data };
+    } catch (error) {
+      console.error('API call error to /sell-car:', error);
+      return { success: false, status: 0, data: { message: 'Network error.' } };
+    }
+  }
+
+  async submitAppointment(formData: FormData): Promise<Models.ApiResult<any>> {
+    const url = `${this.baseURL}/appointment/submit`;
+    const token = await this.getToken();
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: formData,
+      });
+      const data = await response.json();
+      return { success: response.ok, status: response.status, data };
+    } catch (error) {
+      console.error('API call error to /appointment/submit:', error);
+      return { success: false, status: 0, data: { message: 'Network error.' } };
+    }
+  }
+
+  // 🟢 NEW: Submit Contact
+  async submitContact(formData: FormData): Promise<Models.ApiResult<any>> {
+    const url = `${this.baseURL}/contact/submit`;
+    const token = await this.getToken();
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: formData,
+      });
+      const data = await response.json();
+      return { success: response.ok, status: response.status, data };
+    } catch (error) {
+      console.error('API call error to /contact/submit:', error);
+      return { success: false, status: 0, data: { message: 'Network error.' } };
+    }
+  }
+
+  // ... (Other methods) ...
+
+  async getInvoices(page: number = 1): Promise<Models.ApiResult<Models.ApiResponse<Models.PaginatedResponse<Models.Invoice>>>> {
+    return this.apiCall(`/invoices?page=${page}`);
+  }
+
+  async uploadPaymentSlip(formData: FormData): Promise<Models.ApiResult<any>> {
+    const url = `${this.baseURL}/invoices/upload-payment-slip`;
+    const token = await this.getToken();
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: formData,
+      });
+      const data = await response.json();
+      return { success: response.ok, status: response.status, data };
+    } catch (error) {
+      console.error('API call error to /invoices/upload-payment-slip:', error);
+      return { success: false, status: 0, data: { message: 'Network error.' } };
+    }
+  }
+
+  async getPreferences(): Promise<Models.ApiResult<{ data: Models.UserPreference[] }>> {
+    return this.apiCall('/preferences/index');
+  }
+
+  async createPreference(data: any): Promise<Models.ApiResult<any>> {
+    return this.apiCall('/preferences/create', { method: 'POST', body: JSON.stringify(data) });
+  }
+
+  async getPreferenceDetail(id: number): Promise<Models.ApiResult<{ data: Models.UserPreference }>> {
+    return this.apiCall(`/preferences/show/${id}`);
+  }
+
+  async updatePreference(id: number, data: any): Promise<Models.ApiResult<any>> {
+    return this.apiCall(`/preferences/update/${id}`, { method: 'POST', body: JSON.stringify(data) });
+  }
+
+  async deletePreference(id: number): Promise<Models.ApiResult<any>> {
+    return this.apiCall(`/preferences/delete/${id}`, { method: 'DELETE' });
   }
 
   async getPackages(): Promise<Models.ApiResult<Models.ApiResponse<Models.PaginatedResponse<Models.Package>>>> {

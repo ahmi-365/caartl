@@ -13,6 +13,7 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
   Linking,
+  TextInput, // 🟢 Imported
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
@@ -35,6 +36,7 @@ import { RootStackParamList } from '../navigation/AppNavigator';
 import apiService from '../services/ApiService';
 import * as Models from '../data/modal';
 import { useAlert } from '../context/AlertContext';
+import { useAuth } from '../context/AuthContext'; // 🟢 Added Auth
 
 type CarDetailRouteProp = RouteProp<RootStackParamList, 'CarDetailPage'>;
 type CarDetailNavigationProp = NativeStackNavigationProp<RootStackParamList, 'CarDetailPage'>;
@@ -43,9 +45,7 @@ const { width, height } = Dimensions.get('window');
 const STORAGE_BASE_URL = 'https://api.caartl.com/storage/';
 const TAB_BAR_HEIGHT = 60;
 
-// ==========================================
-// 1. SHARED UI COMPONENTS
-// ==========================================
+// ... (Keep Shared Components: ZoomableImage, ImagePreviewModal, VideoPlayerModal, SpecCard, etc. same as before) ...
 
 const ZoomableImage = ({ uri }: { uri: string }) => {
   const scale = useSharedValue(1);
@@ -176,7 +176,6 @@ const getPaintBadgeColor = (condition: string) => {
   if (parts.length > 1) {
     const colorKey = parts[0].trim().toLowerCase();
     label = parts[1].trim();
-
     switch (colorKey) {
       case 'red': colorName = '#ff4444'; break;
       case 'blue': colorName = '#4488ff'; break;
@@ -190,7 +189,6 @@ const getPaintBadgeColor = (condition: string) => {
   } else if (condition.toLowerCase().includes('original')) {
     colorName = '#27ae60';
   }
-
   return { backgroundColor: colorName, label };
 };
 
@@ -211,12 +209,12 @@ export const CarDetailPage = () => {
   const route = useRoute<CarDetailRouteProp>();
   const { carId } = route.params;
 
+  const { user } = useAuth(); // 🟢 Get User
   const { showAlert } = useAlert();
   const [loading, setLoading] = useState(true);
 
   const [fullData, setFullData] = useState<Models.AuctionDetailsResponse['data'] | null>(null);
   const [bookingStatus, setBookingStatus] = useState<'none' | 'pending_payment' | 'intransfer' | 'delivered'>('none');
-  const [bookingData, setBookingData] = useState<any>(null);
   const [damageTypes, setDamageTypes] = useState<any[]>([]);
 
   // UI States
@@ -234,12 +232,19 @@ export const CarDetailPage = () => {
   const [videoModalVisible, setVideoModalVisible] = useState(false);
   const [currentVideoUrl, setCurrentVideoUrl] = useState<string | null>(null);
 
+  // Inquire Modal
+  const [inquireVisible, setInquireVisible] = useState(false);
+  const [inqName, setInqName] = useState('');
+  const [inqEmail, setInqEmail] = useState('');
+  const [inqPhone, setInqPhone] = useState('');
+  const [inqAddress, setInqAddress] = useState('');
+  const [submittingInquiry, setSubmittingInquiry] = useState(false);
+
   // Scroll
   const scrollViewRef = useRef<ScrollView>(null);
   const sectionYCoords = useRef<{ [key: string]: number }>({});
   const isManualScroll = useRef(false);
 
-  // --- Fetch Data ---
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
@@ -252,7 +257,6 @@ export const CarDetailPage = () => {
         const bookRes = await apiService.getBookingByVehicle(carId);
         if (bookRes.success && bookRes.data.data && bookRes.data.data.data.length > 0) {
           const latestBooking = bookRes.data.data.data[0];
-          setBookingData(latestBooking);
           setBookingStatus(latestBooking.status);
         }
 
@@ -270,6 +274,15 @@ export const CarDetailPage = () => {
     fetchData();
   }, [carId]);
 
+  // Pre-fill Inquiry Form
+  useEffect(() => {
+    if (user) {
+      setInqName(user.name);
+      setInqEmail(user.email);
+      setInqPhone(user.phone || '');
+    }
+  }, [user]);
+
   const getDamageBadgeColor = (damageType: string) => {
     const found = damageTypes.find(d => d.name.toLowerCase() === damageType.toLowerCase());
     return found ? found.color : '#ff4444';
@@ -279,7 +292,6 @@ export const CarDetailPage = () => {
     setExpandedDamageCategories(prev => ({ ...prev, [category]: !prev[category] }));
   };
 
-  // --- Handlers ---
   const handleLayout = (e: LayoutChangeEvent, section: string) => {
     sectionYCoords.current[section] = e.nativeEvent.layout.y;
   };
@@ -290,7 +302,6 @@ export const CarDetailPage = () => {
     requestAnimationFrame(() => {
       const y = sectionYCoords.current[tab];
       if (y !== undefined && scrollViewRef.current) {
-        // Adjust for header and sticky tabs
         scrollViewRef.current.scrollTo({ y: y - TAB_BAR_HEIGHT - 10, animated: true });
       }
     });
@@ -300,7 +311,6 @@ export const CarDetailPage = () => {
   const onScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (isManualScroll.current) return;
     const scrollY = event.nativeEvent.contentOffset.y;
-    // Trigger point adjusted for sticky header height
     const triggerPoint = scrollY + TAB_BAR_HEIGHT + 100;
     let currentTab = dynamicTabs[0];
     for (const tab of dynamicTabs) {
@@ -334,6 +344,36 @@ export const CarDetailPage = () => {
   const handleVideoOpen = (uri: string) => {
     setCurrentVideoUrl(uri);
     setVideoModalVisible(true);
+  };
+
+  // 🟢 Handle Inquiry Submission
+  const handleSubmitInquiry = async () => {
+    if (!inqName || !inqEmail || !inqPhone) {
+      showAlert("Error", "Please fill in Name, Email and Phone.");
+      return;
+    }
+
+    setSubmittingInquiry(true);
+    const formData = new FormData();
+    formData.append('vehicle_id', String(carId));
+    formData.append('name', inqName);
+    formData.append('email', inqEmail);
+    formData.append('phone', inqPhone);
+    if (inqAddress) formData.append('address', inqAddress);
+
+    try {
+      const result = await apiService.inquireCar(formData);
+      if (result.success) {
+        showAlert("Success", "Inquiry sent successfully!");
+        setInquireVisible(false);
+      } else {
+        showAlert("Error", result.data.message || "Failed to send inquiry.");
+      }
+    } catch (e) {
+      showAlert("Error", "Network error.");
+    } finally {
+      setSubmittingInquiry(false);
+    }
   };
 
   // --- Data Parsing ---
@@ -371,21 +411,19 @@ export const CarDetailPage = () => {
     const usedKeys = new Set<string>();
     const getField = (key: string, label?: string) => {
       let val = inspection[key];
-      // 🟢 FIX: Handle objects (like brand, model) or nulls gracefully
       if (val === null || val === undefined) return null;
       if (typeof val === 'object') {
-        if (val.name) val = val.name; // Use name if present
-        else if (val.value) val = val.value; // Use value if present
-        else return null; // Skip complex objects we can't render
+        if (val.name) val = val.name;
+        else if (val.value) val = val.value;
+        else return null;
       }
-
       usedKeys.add(key);
       let media = null;
       if (inspection.fields) {
         const fieldObj = inspection.fields.find((f: any) => f.name === key);
         if (fieldObj && fieldObj.files && fieldObj.files.length > 0) media = fieldObj.files[0];
       }
-      return { label: label || formatKey(key), value: String(val), media }; // Ensure value is a string
+      return { label: label || formatKey(key), value: String(val), media };
     };
 
     const categories = {
@@ -395,13 +433,10 @@ export const CarDetailPage = () => {
       exterior: [getField('overallCondition', 'Overall'), getField('body_type', 'Body Type'), getField('parkingSensors', 'Parking Sensors')].filter((item): item is { label: string, value: any, media: any } => !!item),
       wheels: [getField('wheelsType', 'Wheels Type'), getField('tiresSize', 'Tires Size'), getField('rimsSizeFront', 'Front Rims')].filter((item): item is { label: string, value: any, media: any } => !!item),
     };
-
-    // 🟢 FIX: Filter out object values from "Other" keys too
     const ignoredKeys = ['id', 'vehicle_id', 'created_at', 'updated_at', 'file_path', 'damage_file_path', 'images', 'damages', 'fields', 'paintCondition', 'final_conclusion', 'remarks', 'make', 'model', 'vehicle', 'pivot', 'inspector', 'inspector_id', 'inspection_enquiry_id', 'brand', 'vehicle_model'];
-
     const otherItems = Object.keys(inspection)
       .filter(key => !usedKeys.has(key) && !ignoredKeys.includes(key) && inspection[key] !== null && inspection[key] !== '')
-      .map(key => getField(key)); // getField now handles objects
+      .map(key => getField(key));
 
     // @ts-ignore
     categories.other = otherItems.filter(item => !!item);
@@ -467,30 +502,35 @@ export const CarDetailPage = () => {
 
   const renderStatusCard = () => {
     if (bookingStatus !== 'none') {
+      const statusColor = bookingStatus === 'pending_payment' ? '#ffaa00' : (bookingStatus === 'intransfer' ? '#00a8ff' : '#cadb2a');
+      // Use only supported icon names
+      const statusIcon = bookingStatus === 'pending_payment' ? 'clock' : (bookingStatus === 'intransfer' ? 'truck' : 'check-circle');
+      const statusIconComponent = <Feather name={statusIcon} size={40} color={statusColor} style={{ marginBottom: 10 }} />;
+
       if (bookingStatus === 'pending_payment') {
         return (
           <View style={styles.statusCard}>
-            <Feather name="clock" size={40} color="#ffaa00" style={{ marginBottom: 10 }} />
-            <Text style={styles.statusTitle}>Booking Confirmation Pending</Text>
-            <Text style={styles.statusSubText}>You have successfully booked this vehicle. Waiting for admin confirmation.</Text>
+            {statusIconComponent}
+            <Text style={styles.statusTitle}>Payment Pending</Text>
+            <Text style={styles.statusSubText}>Complete payment to confirm your booking.</Text>
           </View>
         );
       }
       if (bookingStatus === 'intransfer') {
         return (
           <View style={styles.statusCard}>
-            <MaterialCommunityIcons name="truck-delivery" size={40} color="#00a8ff" style={{ marginBottom: 10 }} />
+            {statusIconComponent}
             <Text style={styles.statusTitle}>Vehicle In-Transfer</Text>
-            <Text style={styles.statusSubText}>Your vehicle is currently being transferred.</Text>
+            <Text style={styles.statusSubText}>Your vehicle is currently being transferred. Tracking info will be updated soon.</Text>
           </View>
         );
       }
       if (bookingStatus === 'delivered') {
         return (
           <View style={styles.statusCard}>
-            <Feather name="check-circle" size={40} color="#cadb2a" style={{ marginBottom: 10 }} />
+            {statusIconComponent}
             <Text style={styles.statusTitle}>Vehicle Delivered</Text>
-            <Text style={styles.statusSubText}>Your vehicle has been successfully delivered.</Text>
+            <Text style={styles.statusSubText}>Your vehicle has been successfully delivered. Enjoy your ride!</Text>
           </View>
         );
       }
@@ -511,8 +551,6 @@ export const CarDetailPage = () => {
           <View style={{ width: 24 }} />
         </View>
 
-        {/* ScrollView with Sticky Indices */}
-        {/* 🟢 Sticky Header is at Index 1 (Tabs), because Index 0 is the banner/description wrapper */}
         <ScrollView
           ref={scrollViewRef}
           onScroll={onScroll}
@@ -786,18 +824,29 @@ export const CarDetailPage = () => {
           <View style={{ height: 100 }} />
         </ScrollView>
 
-        {/* Footer: Buy Now Button (if not booked) */}
+        {/* Footer: Action Buttons */}
         {bookingStatus === 'none' ? (
           <View style={styles.negotiationFooter}>
-            <TouchableOpacity style={styles.footerBtnFilled} onPress={handleBookNow}>
-              <Text style={styles.footerBtnTextFilled}>Buy Now</Text>
+            {user?.id !== 0 && user?.name !== 'Guest' ? (
+              <TouchableOpacity style={styles.footerBtnFilled} onPress={handleBookNow}>
+                <Text style={styles.footerBtnTextFilled}>Buy Now</Text>
+              </TouchableOpacity>
+            ) : null}
+
+            {/* 🟢 NEW: Inquire Now Button */}
+            <TouchableOpacity
+              style={styles.footerBtnOutline}
+              onPress={() => setInquireVisible(true)}
+            >
+              <Text style={styles.footerBtnTextOutline}>Inquire Now</Text>
             </TouchableOpacity>
+
             <Text style={styles.adminFeeText}>*Admin fee <Text style={styles.adminFeeBold}>AED 1,499</Text> will be charged</Text>
           </View>
         ) : (
           <View style={styles.negotiationFooter}>
-            <TouchableOpacity style={styles.footerBtnFilled} onPress={handleViewBooking}>
-              <Text style={styles.footerBtnTextFilled}>View Booking Status</Text>
+            <TouchableOpacity style={styles.footerBtnOutline} onPress={handleViewBooking}>
+              <Text style={styles.footerBtnTextOutline}>View Booking</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -814,6 +863,42 @@ export const CarDetailPage = () => {
           videoUrl={currentVideoUrl}
           onClose={() => setVideoModalVisible(false)}
         />
+
+        {/* 🟢 NEW: Inquiry Modal */}
+        <Modal visible={inquireVisible} transparent animationType="slide" onRequestClose={() => setInquireVisible(false)}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Inquire about {vehicle.brand?.name} {vehicle.vehicle_model?.name}</Text>
+                <TouchableOpacity onPress={() => setInquireVisible(false)}>
+                  <Feather name="x" size={24} color="#fff" />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView contentContainerStyle={{ padding: 10 }}>
+                <Text style={styles.label}>Name</Text>
+                <TextInput style={styles.input} value={inqName} onChangeText={setInqName} placeholderTextColor="#666" placeholder="Your Name" />
+
+                <Text style={styles.label}>Email</Text>
+                <TextInput style={styles.input} value={inqEmail} onChangeText={setInqEmail} keyboardType="email-address" placeholderTextColor="#666" placeholder="Your Email" />
+
+                <Text style={styles.label}>Phone</Text>
+                <TextInput style={styles.input} value={inqPhone} onChangeText={setInqPhone} keyboardType="phone-pad" placeholderTextColor="#666" placeholder="Your Phone" />
+
+                <Text style={styles.label}>Address (Optional)</Text>
+                <TextInput style={styles.input} value={inqAddress} onChangeText={setInqAddress} placeholderTextColor="#666" placeholder="Your Address" />
+
+                <TouchableOpacity
+                  style={styles.submitBtn}
+                  onPress={handleSubmitInquiry}
+                  disabled={submittingInquiry}
+                >
+                  {submittingInquiry ? <ActivityIndicator color="#000" /> : <Text style={styles.submitBtnText}>Submit Inquiry</Text>}
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
 
       </LinearGradient>
     </View>
@@ -903,6 +988,11 @@ const styles = StyleSheet.create({
   negotiationFooter: { flexDirection: 'column', alignItems: 'center', padding: 16, paddingBottom: 12, backgroundColor: '#000', borderTopWidth: 1, borderTopColor: '#222' },
   footerBtnFilled: { width: '100%', backgroundColor: '#cadb2a', borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingVertical: 15 },
   footerBtnTextFilled: { color: '#000', fontSize: 16, fontWeight: 'bold', fontFamily: 'Poppins' },
+
+  // 🟢 New Footer Outline Button
+  footerBtnOutline: { width: '100%', borderWidth: 1, borderColor: '#cadb2a', borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingVertical: 15, marginTop: 10 },
+  footerBtnTextOutline: { color: '#cadb2a', fontSize: 16, fontWeight: 'bold', fontFamily: 'Poppins' },
+
   adminFeeText: { color: '#888', fontSize: 10, marginTop: 12, fontFamily: 'Poppins' },
   adminFeeBold: { color: '#fff', fontWeight: 'bold' },
   commentBox: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: '#111', padding: 16, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: '#222' },
@@ -914,4 +1004,14 @@ const styles = StyleSheet.create({
   videoModalContainer: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
   videoCloseBtn: { position: 'absolute', top: 50, right: 30, zIndex: 20, padding: 10 },
   fullscreenVideo: { width: width, height: height * 0.8 },
+
+  // 🟢 Inquiry Modal Styles
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', padding: 20 },
+  modalContent: { backgroundColor: '#111', borderRadius: 16, padding: 20, maxHeight: '80%', borderWidth: 1, borderColor: '#cadb2a' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20, borderBottomWidth: 1, borderBottomColor: '#333', paddingBottom: 10 },
+  modalTitle: { fontSize: 18, fontWeight: 'bold', color: '#fff', fontFamily: 'Poppins', flex: 1 },
+  label: { color: '#cadb2a', fontSize: 14, fontFamily: 'Poppins', marginBottom: 5, marginTop: 10 },
+  input: { backgroundColor: '#1a1a1a', borderRadius: 8, padding: 12, color: '#fff', borderWidth: 1, borderColor: '#333' },
+  submitBtn: { backgroundColor: '#cadb2a', borderRadius: 10, paddingVertical: 15, alignItems: 'center', marginTop: 20 },
+  submitBtnText: { color: '#000', fontSize: 16, fontWeight: 'bold', fontFamily: 'Poppins' },
 });

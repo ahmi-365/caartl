@@ -22,6 +22,7 @@ type ProfileScreenProp = NativeStackNavigationProp<RootStackParamList>;
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
+  const isGuest = user && user.id === 0;
   const navigation = useNavigation<ProfileScreenProp>();
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
 
@@ -55,15 +56,17 @@ export default function ProfileScreen() {
               />
               <View style={styles.profileInfo}>
                 <Text style={styles.profileName}>{user?.name || 'User Name'}</Text>
-                <Text style={styles.profileEmail}>{user?.email || 'email@example.com'}</Text>
+                {!isGuest && <Text style={styles.profileEmail}>{user?.email || 'email@example.com'}</Text>}
                 <Text style={styles.profileRole}>{user?.role || 'Member'}</Text>
               </View>
-              <TouchableOpacity
-                style={styles.editIcon}
-                onPress={() => navigation.navigate('EditProfile')} // 👈 Link to Edit
-              >
-                <Feather name="edit-2" size={20} color="#CADB2A" />
-              </TouchableOpacity>
+              {!isGuest && (
+                <TouchableOpacity
+                  style={styles.editIcon}
+                  onPress={() => navigation.navigate('EditProfile')}
+                >
+                  <Feather name="edit-2" size={20} color="#CADB2A" />
+                </TouchableOpacity>
+              )}
             </View>
 
             {/* 👈 Display Bio if exists */}
@@ -79,35 +82,65 @@ export default function ProfileScreen() {
 
           {/* Menu Items */}
           <View style={styles.menuContainer}>
+            {isGuest ? (
+              <>
+                <TouchableOpacity style={[styles.menuItem, { opacity: 0.5 }]} disabled>
+                  <View style={styles.menuIconContainer}>
+                    <Feather name="sliders" size={24} color="#000" />
+                  </View>
+                  <Text style={styles.menuText}>My Preferences</Text>
+                  <Feather name="arrow-right" size={24} color="#fff" />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.menuItem} onPress={logout}>
+                  <View style={[styles.menuIconContainer, { backgroundColor: '#CADB2A' }]}>
+                    <Feather name="log-in" size={24} color="#000" />
+                  </View>
+                  <Text style={[styles.menuText, { color: '#cadb2a' }]}>Log In</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={() => navigation.navigate('PreferencesList')}
+                >
+                  <View style={styles.menuIconContainer}>
+                    <Feather name="sliders" size={24} color="#000" />
+                  </View>
+                  <Text style={styles.menuText}>My Preferences</Text>
+                  <Feather name="arrow-right" size={24} color="#fff" />
+                </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => navigation.navigate('ChangePassword')}
-            >
-              <View style={styles.menuIconContainer}>
-                <Feather name="lock" size={24} color="#000" />
-              </View>
-              <Text style={styles.menuText}>Change Password</Text>
-              <Feather name="arrow-right" size={24} color="#fff" />
-            </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={() => navigation.navigate('ChangePassword')}
+                >
+                  <View style={styles.menuIconContainer}>
+                    <Feather name="lock" size={24} color="#000" />
+                  </View>
+                  <Text style={styles.menuText}>Change Password</Text>
+                  <Feather name="arrow-right" size={24} color="#fff" />
+                </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => setDeleteModalVisible(true)}
-            >
-              <View style={[styles.menuIconContainer, { backgroundColor: '#ff4444' }]}>
-                <Feather name="trash-2" size={24} color="#fff" />
-              </View>
-              <Text style={[styles.menuText, { color: '#ff4444' }]}>Delete Account</Text>
-              <Feather name="arrow-right" size={24} color="#ff4444" />
-            </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={() => setDeleteModalVisible(true)}
+                >
+                  <View style={[styles.menuIconContainer, { backgroundColor: '#ff4444' }]}>
+                    <Feather name="trash-2" size={24} color="#fff" />
+                  </View>
+                  <Text style={[styles.menuText, { color: '#ff4444' }]}>Delete Account</Text>
+                  <Feather name="arrow-right" size={24} color="#ff4444" />
+                </TouchableOpacity>
 
-            <TouchableOpacity style={styles.menuItem} onPress={logout}>
-              <View style={styles.menuIconContainer}>
-                <MaterialCommunityIcons name="logout" size={24} color="#000" />
-              </View>
-              <Text style={styles.menuText}>Log Out</Text>
-            </TouchableOpacity>
+                <TouchableOpacity style={styles.menuItem} onPress={logout}>
+                  <View style={styles.menuIconContainer}>
+                    <MaterialCommunityIcons name="logout" size={24} color="#000" />
+                  </View>
+                  <Text style={styles.menuText}>Log Out</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
 
           <View style={{ height: 100 }} />

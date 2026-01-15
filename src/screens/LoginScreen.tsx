@@ -27,7 +27,7 @@ interface LoginErrors {
 
 const LoginScreen = () => {
   const navigation = useNavigation<LoginScreenNavigationProp>();
-  const { login } = useAuth();
+  const { login, guestLogin } = useAuth();
   const { showAlert } = useAlert();
 
   const [email, setEmail] = useState('');
@@ -72,6 +72,19 @@ const LoginScreen = () => {
     } catch (error) {
       console.error("Login component error:", error);
       showAlert('Network Error', 'Could not connect to the server. Please check your internet connection.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 🟢 ADD: Guest login handler
+  const handleGuestLogin = async () => {
+    setLoading(true);
+    try {
+      await guestLogin();
+      navigation.navigate('DrawerRoot');
+    } catch (error) {
+      showAlert('Error', 'Could not continue as guest.');
     } finally {
       setLoading(false);
     }
@@ -145,8 +158,14 @@ const LoginScreen = () => {
           <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
         </TouchableOpacity>
 
+
         <TouchableOpacity style={[styles.loginButton, loading && styles.loginButtonDisabled]} onPress={handleLogin} disabled={loading}>
           {loading ? <ActivityIndicator color="#000000" /> : <Text style={styles.loginButtonText}>Login</Text>}
+        </TouchableOpacity>
+
+        {/* 🟢 ADD: Guest login button */}
+        <TouchableOpacity style={[styles.loginButton, { backgroundColor: '#222', marginTop: 10 }]} onPress={handleGuestLogin} disabled={loading}>
+          <Text style={[styles.loginButtonText, { color: '#fff' }]}>Continue as Guest</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.signUpContainer} onPress={() => navigation.navigate('Register')} disabled={loading}>

@@ -72,7 +72,7 @@ export const SplashScreenDark = () => {
       </Animated.View>
 
       <Animated.Text style={[styles.heading, { opacity: fadeAnim3, transform: [{ translateY: translateY3 }], fontFamily: 'Borg9' }]}>
-        {'Lorem Ipsum,\nDolor Sit Amet'}
+        {'Buy. Sell. Auction.\nLuxury & Sports Cars'}
       </Animated.Text>
 
       <Animated.Text style={[styles.description, { opacity: fadeAnim4, transform: [{ translateY: translateY4 }] }]}>
