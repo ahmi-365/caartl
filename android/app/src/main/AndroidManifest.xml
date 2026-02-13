@@ -7,6 +7,10 @@
   <uses-permission android:name="android.permission.VIBRATE"/>
   <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
   <queries>
+    <package android:name="com.whatsapp" />
+    <package android:name="com.whatsapp.w4b" /> <!-- If using WhatsApp Business -->
+</queries>
+  <queries>
     <intent>
       <action android:name="android.intent.action.VIEW"/>
       <category android:name="android.intent.category.BROWSABLE"/>

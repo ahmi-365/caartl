@@ -12,7 +12,9 @@ import {
   LayoutChangeEvent,
   NativeSyntheticEvent,
   NativeScrollEvent,
+  // FlatList, // 🔴 Removed from here
 } from 'react-native';
+import { FlatList } from 'react-native-gesture-handler'; // 🟢 Added from gesture-handler
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -21,6 +23,7 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
+  runOnJS,
 } from "react-native-reanimated";
 import {
   Gesture,
@@ -43,9 +46,10 @@ const STORAGE_BASE_URL = 'https://api.caartl.com/storage/';
 const TAB_BAR_HEIGHT = 60;
 
 // ==========================================
-// 1. CUSTOM ZOOMABLE IMAGE COMPONENT
+// 1. CUSTOM ZOOMABLE IMAGE COMPONENT (FIXED)
 // ==========================================
-const ZoomableImage = ({ uri }: { uri: string }) => {
+const ZoomableImage = ({ uri, onRequestScrollToggle }: { uri: string, onRequestScrollToggle: (locked: boolean) => void }) => {
+  const [isZoomed, setIsZoomed] = useState(false); // 🟢 Track zoom state locally
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
   const translateX = useSharedValue(0);
@@ -53,22 +57,44 @@ const ZoomableImage = ({ uri }: { uri: string }) => {
   const savedTranslateX = useSharedValue(0);
   const savedTranslateY = useSharedValue(0);
 
+  const resetZoom = () => {
+    'worklet';
+    scale.value = withTiming(1);
+    savedScale.value = 1;
+    translateX.value = withTiming(0);
+    translateY.value = withTiming(0);
+    savedTranslateX.value = 0;
+    savedTranslateY.value = 0;
+    runOnJS(setIsZoomed)(false);
+    runOnJS(onRequestScrollToggle)(false);
+  };
+
   const pinchGesture = Gesture.Pinch()
+    .onStart(() => {
+      runOnJS(setIsZoomed)(true);
+      runOnJS(onRequestScrollToggle)(true);
+    })
     .onUpdate((e) => {
       scale.value = savedScale.value * e.scale;
+      // Clamp scale
       if (scale.value < 1) scale.value = 1;
       if (scale.value > 5) scale.value = 5;
     })
     .onEnd(() => {
       savedScale.value = scale.value;
+      if (scale.value <= 1.1) {
+        resetZoom();
+      }
     });
 
   const panGesture = Gesture.Pan()
     .onUpdate((e) => {
-      const maxTranslateX = (width * (scale.value - 1)) / 2;
-      const maxTranslateY = (height * 0.8 * (scale.value - 1)) / 2;
-      translateX.value = Math.min(Math.max(savedTranslateX.value + e.translationX, -maxTranslateX), maxTranslateX);
-      translateY.value = Math.min(Math.max(savedTranslateY.value + e.translationY, -maxTranslateY), maxTranslateY);
+      if (scale.value > 1.1) {
+        const maxTranslateX = (width * (scale.value - 1)) / 2;
+        const maxTranslateY = (height * 0.8 * (scale.value - 1)) / 2;
+        translateX.value = Math.min(Math.max(savedTranslateX.value + e.translationX, -maxTranslateX), maxTranslateX);
+        translateY.value = Math.min(Math.max(savedTranslateY.value + e.translationY, -maxTranslateY), maxTranslateY);
+      }
     })
     .onEnd(() => {
       savedTranslateX.value = translateX.value;
@@ -78,15 +104,22 @@ const ZoomableImage = ({ uri }: { uri: string }) => {
   const doubleTapGesture = Gesture.Tap()
     .numberOfTaps(2)
     .onEnd(() => {
-      scale.value = withTiming(1);
-      translateX.value = withTiming(0);
-      translateY.value = withTiming(0);
-      savedScale.value = 1;
-      savedTranslateX.value = 0;
-      savedTranslateY.value = 0;
+      if (scale.value > 1.1) {
+        resetZoom();
+      } else {
+        scale.value = withTiming(2);
+        savedScale.value = 2;
+        runOnJS(setIsZoomed)(true);
+        runOnJS(onRequestScrollToggle)(true);
+      }
     });
 
-  const composed = Gesture.Simultaneous(pinchGesture, panGesture, doubleTapGesture);
+  // 🟢 Conditional Composition: Only include Pan gesture when zoomed in.
+  // This allows the FlatList to handle swipes when the image is fully zoomed out.
+  const composed = isZoomed
+    ? Gesture.Simultaneous(pinchGesture, panGesture, doubleTapGesture)
+    : Gesture.Simultaneous(pinchGesture, doubleTapGesture);
+
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [
       { translateX: translateX.value },
@@ -97,10 +130,10 @@ const ZoomableImage = ({ uri }: { uri: string }) => {
 
   return (
     <GestureDetector gesture={composed}>
-      <Animated.View style={{ width, height: height * 0.8, justifyContent: 'center', alignItems: 'center' }}>
+      <Animated.View style={{ width, height, justifyContent: 'center', alignItems: 'center' }}>
         <Animated.Image
           source={{ uri }}
-          style={[{ width: '100%', height: '100%', resizeMode: 'contain' }, animatedStyle]}
+          style={[{ width: '100%', height: '80%', resizeMode: 'contain' }, animatedStyle]}
         />
       </Animated.View>
     </GestureDetector>
@@ -110,18 +143,82 @@ const ZoomableImage = ({ uri }: { uri: string }) => {
 // ==========================================
 // 2. MODAL COMPONENTS
 // ==========================================
-const ImagePreviewModal = ({ visible, imageUrl, onClose, isWhiteBackground = false }: any) => (
-  <Modal visible={visible} transparent={true} onRequestClose={onClose} animationType="fade">
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <View style={[styles.previewContainer, isWhiteBackground && styles.previewContainerWhite]}>
-        <TouchableOpacity style={styles.previewCloseBtn} onPress={onClose} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
-          <Feather name="x" size={30} color={isWhiteBackground ? "#000" : "#fff"} />
-        </TouchableOpacity>
-        <ZoomableImage uri={imageUrl} />
-      </View>
-    </GestureHandlerRootView>
-  </Modal>
-);
+
+const ImagePreviewModal = ({ visible, images = [], initialIndex = 0, onClose, isWhiteBackground = false }: any) => {
+  const flatListRef = useRef<FlatList>(null);
+  const [currentIndex, setCurrentIndex] = useState(initialIndex);
+  
+  // State to control FlatList scrolling
+  const [scrollEnabled, setScrollEnabled] = useState(true);
+
+  useEffect(() => {
+    if (visible && images.length > 0) {
+      setCurrentIndex(initialIndex);
+      setScrollEnabled(true);
+      // Small timeout to ensure FlatList is rendered before scrolling
+      setTimeout(() => {
+        flatListRef.current?.scrollToIndex({ index: initialIndex, animated: false });
+      }, 50);
+    }
+  }, [visible, initialIndex, images]);
+
+  const onScroll = (e: any) => {
+    const idx = Math.round(e.nativeEvent.contentOffset.x / width);
+    setCurrentIndex(idx);
+  };
+
+  const handleScrollToggle = (locked: boolean) => {
+    setScrollEnabled(!locked);
+  };
+
+  return (
+    <Modal visible={visible} transparent={true} onRequestClose={onClose} animationType="fade">
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <View style={[styles.previewContainer, isWhiteBackground && styles.previewContainerWhite]}>
+          <TouchableOpacity 
+            style={styles.previewCloseBtn} 
+            onPress={onClose} 
+            hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+            zIndex={20}
+          >
+            <Feather name="x" size={30} color={isWhiteBackground ? "#000" : "#fff"} />
+          </TouchableOpacity>
+
+          <FlatList
+            ref={flatListRef}
+            data={images}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            scrollEnabled={scrollEnabled} 
+            keyExtractor={(_, index) => index.toString()}
+            onMomentumScrollEnd={onScroll}
+            getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
+            initialScrollIndex={initialIndex}
+            // 🟢 Ensure FlatList gesture priority
+            waitFor={scrollEnabled ? undefined : undefined} 
+            renderItem={({ item }) => (
+              <View style={{ width: width, height: height, justifyContent: 'center' }}>
+                <ZoomableImage 
+                  uri={item} 
+                  onRequestScrollToggle={handleScrollToggle}
+                />
+              </View>
+            )}
+          />
+
+          {images.length > 1 && (
+            <View style={styles.previewPagination}>
+              {images.map((_: any, i: number) => (
+                <View key={i} style={[styles.dot, i === currentIndex && styles.activeDot]} />
+              ))}
+            </View>
+          )}
+        </View>
+      </GestureHandlerRootView>
+    </Modal>
+  );
+};
 
 const VideoPlayerModal = ({ visible, videoUrl, onClose }: any) => (
   <Modal visible={visible} transparent={true} onRequestClose={onClose} animationType="slide">
@@ -169,7 +266,6 @@ const InspectionAccordion = ({ title, children, isOpen, onPress }: any) => (
   </View>
 );
 
-// 🟢 HELPER: Color Parser for Paint Condition
 const getPaintBadgeColor = (condition: string) => {
   const parts = condition.split(':');
   let colorName = '#333';
@@ -196,7 +292,6 @@ const getPaintBadgeColor = (condition: string) => {
   return { backgroundColor: colorName, label };
 };
 
-// 🟢 HELPER: Severity Border Color
 const getSeverityBorderColor = (severity: string) => {
   const s = (severity || "").toLowerCase();
   if (s.includes('minor')) return '#4488ff';
@@ -205,13 +300,15 @@ const getSeverityBorderColor = (severity: string) => {
   return '#333';
 };
 
-// 🟢 HELPER: Format Auction End Date
 const formatEndedDate = (dateStr: string) => {
   if (!dateStr) return '';
   const date = new Date(dateStr.replace(' ', 'T'));
   return `Auction Ended ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 };
 
+// ==========================================
+// MAIN SCREEN
+// ==========================================
 export default function LiveCarAuctionScreen() {
   const navigation = useNavigation<LiveAuctionScreenNavigationProp>();
   const route = useRoute<LiveAuctionRouteProp>();
@@ -228,6 +325,8 @@ export default function LiveCarAuctionScreen() {
 
   const [bookingStatus, setBookingStatus] = useState<'none' | 'pending_payment' | 'intransfer' | 'delivered'>('none');
   const [bookingData, setBookingData] = useState<any>(null);
+  
+  // 🟢 State accessible inside component
   const [damageTypes, setDamageTypes] = useState<any[]>([]);
 
   const biddingDataRef = useRef<Models.BiddingInfoResponse['data'] | null>(null);
@@ -236,14 +335,16 @@ export default function LiveCarAuctionScreen() {
   const [elapsedTime, setElapsedTime] = useState("00:00");
   const [myBid, setMyBid] = useState<number>(0);
   const [isBidSheetVisible, setIsBidSheetVisible] = useState(false);
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  
+  const [previewImages, setPreviewImages] = useState<string[]>([]);
+  const [previewIndex, setPreviewIndex] = useState(0);
   const [isPreviewMap, setIsPreviewMap] = useState(false);
+  
   const [videoModalVisible, setVideoModalVisible] = useState(false);
   const [currentVideoUrl, setCurrentVideoUrl] = useState<string | null>(null);
 
-  // 🟢 NEW STATES FOR SLIDERS
   const [activeBannerIndex, setActiveBannerIndex] = useState(0);
-  const [activeInspectionIndex, setActiveInspectionIndex] = useState(0); // For Inspection Slider
+  const [activeInspectionIndex, setActiveInspectionIndex] = useState(0); 
 
   const [showAllFeatures, setShowAllFeatures] = useState(false);
   const [showAllDetails, setShowAllDetails] = useState(false);
@@ -255,7 +356,12 @@ export default function LiveCarAuctionScreen() {
   const sectionYCoords = useRef<{ [key: string]: number }>({});
   const isManualScroll = useRef(false);
 
-  // --- Fetch Data ---
+  // 🟢 Moved Inside Component so it can access damageTypes state
+  const getDamageBadgeColor = (damageType: string) => {
+    const found = damageTypes.find(d => d.name.toLowerCase() === damageType.toLowerCase());
+    return found ? found.color : '#ff4444'; 
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
@@ -293,16 +399,10 @@ export default function LiveCarAuctionScreen() {
     fetchData();
   }, [carId, viewType]);
 
-  const getDamageBadgeColor = (damageType: string) => {
-    const found = damageTypes.find(d => d.name.toLowerCase() === damageType.toLowerCase());
-    return found ? found.color : '#ff4444'; // Default red if not found
-  };
-
   const toggleDamageCategory = (category: string) => {
     setExpandedDamageCategories(prev => ({ ...prev, [category]: !prev[category] }));
   };
 
-  // --- Live Polling ---
   const fetchLiveBidData = useCallback(async () => {
     try {
       const result = await apiService.getBiddingInfo(carId);
@@ -333,7 +433,6 @@ export default function LiveCarAuctionScreen() {
     }
   }, [carId, viewType, fetchLiveBidData]);
 
-  // --- Timers ---
   useEffect(() => {
     if (viewType === 'negotiation') return;
 
@@ -371,7 +470,6 @@ export default function LiveCarAuctionScreen() {
     return () => clearInterval(timer);
   }, [viewType, fullData, biddingData]);
 
-  // --- Handlers ---
   const handleLayout = (e: LayoutChangeEvent, section: string) => {
     sectionYCoords.current[section] = e.nativeEvent.layout.y;
   };
@@ -441,8 +539,9 @@ export default function LiveCarAuctionScreen() {
     navigation.navigate('ViewBooking', { vehicleId: carId });
   };
 
-  const handleImageOpen = (uri: string, isMap: boolean = false) => {
-    setPreviewImage(uri);
+  const handleImageOpen = (imagesList: string[], index: number, isMap: boolean = false) => {
+    setPreviewImages(imagesList);
+    setPreviewIndex(index);
     setIsPreviewMap(isMap);
   };
 
@@ -526,7 +625,7 @@ export default function LiveCarAuctionScreen() {
             onPress={() => {
               const path = item.media.path.startsWith('http') ? item.media.path : `${STORAGE_BASE_URL}${item.media.path}`;
               if (item.media.file_type === 'video') handleVideoOpen(path);
-              else handleImageOpen(path, false);
+              else handleImageOpen([path], 0, false); 
             }}
             style={styles.mediaBtnRight}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -563,9 +662,6 @@ export default function LiveCarAuctionScreen() {
     if (!imageList.includes(vehicle.cover_image.path)) imageList.unshift(vehicle.cover_image.path);
   }
 
-  // Transmission Logic (1=Auto, 2=Manual)
-  const transmission = vehicle.transmission_id === 1 ? 'Automatic' : (vehicle.transmission_id === 2 ? 'Manual' : null);
-
   const exteriorFeatures = fullData?.exterior_features || [];
   const interiorFeatures = fullData?.interior_features || [];
   const allFeaturesCombined = [...exteriorFeatures, ...interiorFeatures];
@@ -596,26 +692,89 @@ export default function LiveCarAuctionScreen() {
     { label: 'Condition', val: vehicle.condition },
   ].filter(item => item.val !== null && item.val !== undefined && item.val !== '');
 
-  const MarketStatsCard = () => (
-    <View style={styles.offerCard}>
-      <Text style={[styles.offerTitle, { marginBottom: 10 }]}>Bid Offer</Text>
-      <View style={styles.offerRow}>
-        <View style={styles.offerItem}>
-          <Text style={styles.offerLabel}>Seller Expectation</Text>
-          <Text style={styles.offerValue}>AED {sellerExpectation.toLocaleString()}</Text>
-        </View>
-        <View style={styles.offerItem}>
-          <Text style={styles.offerLabel}>Current / Highest (My Bid)</Text>
-          <Text style={[styles.offerValue, { color: '#cadb2a' }]}>AED {currentPrice.toLocaleString()}</Text>
-        </View>
-      </View>
-    </View>
-  );
   const renderStatusCard = () => {
     if (bookingStatus !== 'none') {
-      if (bookingStatus === 'pending_payment') {
+        if (bookingStatus === 'pending_payment') {
+          return (
+            <View style={styles.statusCard}>
+              <View style={styles.offerRow}>
+                <View style={styles.offerItem}>
+                  <Text style={styles.offerLabel}>Seller Expectation</Text>
+                  <Text style={styles.offerValue}>AED {sellerExpectation.toLocaleString()}</Text>
+                </View>
+                <View style={styles.offerItem}>
+                  <Text style={styles.offerLabel}>My Bid (Highest)</Text>
+                  <Text style={[styles.offerValue, { color: '#cadb2a' }]}>AED {currentPrice.toLocaleString()}</Text>
+                </View>
+              </View>
+              <Feather name="clock" size={40} color="#ffaa00" style={{ marginBottom: 10 }} />
+              <Text style={styles.statusTitle}>Booking Confirmation Pending</Text>
+              <Text style={styles.statusSubText}>You have successfully booked this vehicle. Waiting for admin confirmation.</Text>
+            </View>
+          );
+        }
+        if (bookingStatus === 'intransfer') {
+          return (
+            <View style={styles.statusCard}>
+              <View style={styles.offerRow}>
+                <View style={styles.offerItem}>
+                  <Text style={styles.offerLabel}>Seller Expectation</Text>
+                  <Text style={styles.offerValue}>AED {sellerExpectation.toLocaleString()}</Text>
+                </View>
+                <View style={styles.offerItem}>
+                  <Text style={styles.offerLabel}>My Bid (Highest)</Text>
+                  <Text style={[styles.offerValue, { color: '#cadb2a' }]}>AED {currentPrice.toLocaleString()}</Text>
+                </View>
+              </View>
+              <MaterialCommunityIcons name="truck-delivery" size={40} color="#00a8ff" style={{ marginBottom: 10 }} />
+              <Text style={styles.statusTitle}>Vehicle In-Transfer</Text>
+              <Text style={styles.statusSubText}>Your vehicle is currently being transferred. Tracking info will be updated soon.</Text>
+            </View>
+          );
+        }
+        if (bookingStatus === 'delivered') {
+          return (
+            <View style={styles.statusCard}>
+              <View style={styles.offerRow}>
+                <View style={styles.offerItem}>
+                  <Text style={styles.offerLabel}>Seller Expectation</Text>
+                  <Text style={styles.offerValue}>AED {sellerExpectation.toLocaleString()}</Text>
+                </View>
+                <View style={styles.offerItem}>
+                  <Text style={styles.offerLabel}>My Bid</Text>
+                  <Text style={[styles.offerValue, { color: '#cadb2a' }]}>AED {currentPrice.toLocaleString()}</Text>
+                </View>
+              </View>
+              <Feather name="check-circle" size={40} color="#cadb2a" style={{ marginBottom: 10 }} />
+              <Text style={styles.statusTitle}>Vehicle Delivered</Text>
+              <Text style={styles.statusSubText}>Your vehicle has been successfully delivered. Enjoy your ride!</Text>
+            </View>
+          );
+        }
+      }
+      if (viewType === 'upcoming') {
         return (
-          <View style={styles.statusCard}>
+          <View style={styles.countdownGrid}>
+            <View style={styles.countBox}><Text style={styles.countNum}>{countdown.days}</Text><Text style={styles.countLabel}>Days</Text></View>
+            <View style={styles.countBox}><Text style={styles.countNum}>{String(countdown.hours).padStart(2, '0')}</Text><Text style={styles.countLabel}>Hrs</Text></View>
+            <View style={styles.countBox}><Text style={styles.countNum}>{String(countdown.minutes).padStart(2, '0')}</Text><Text style={styles.countLabel}>Min</Text></View>
+            <View style={styles.countBox}><Text style={styles.countNum}>{String(countdown.seconds).padStart(2, '0')}</Text><Text style={styles.countLabel}>Sec</Text></View>
+          </View>
+        );
+      }
+      if (viewType === 'live') {
+        return (
+          <View style={styles.countdownGrid}>
+            <View style={styles.countBox}><Text style={styles.countNum}>{countdown.days}</Text><Text style={styles.countLabel}>Days</Text></View>
+            <View style={styles.countBox}><Text style={styles.countNum}>{String(countdown.hours).padStart(2, '0')}</Text><Text style={styles.countLabel}>Hrs</Text></View>
+            <View style={styles.countBox}><Text style={styles.countNum}>{String(countdown.minutes).padStart(2, '0')}</Text><Text style={styles.countLabel}>Min</Text></View>
+            <View style={styles.countBox}><Text style={styles.countNum}>{String(countdown.seconds).padStart(2, '0')}</Text><Text style={styles.countLabel}>Sec</Text></View>
+          </View>
+        );
+      } else {
+        return (
+          <View style={styles.offerCard}>
+            <Text style={styles.offerTitle}>Your Offer has been Accepted</Text>
             <View style={styles.offerRow}>
               <View style={styles.offerItem}>
                 <Text style={styles.offerLabel}>Seller Expectation</Text>
@@ -626,89 +785,11 @@ export default function LiveCarAuctionScreen() {
                 <Text style={[styles.offerValue, { color: '#cadb2a' }]}>AED {currentPrice.toLocaleString()}</Text>
               </View>
             </View>
-            <Feather name="clock" size={40} color="#ffaa00" style={{ marginBottom: 10 }} />
-            <Text style={styles.statusTitle}>Booking Confirmation Pending</Text>
-            <Text style={styles.statusSubText}>You have successfully booked this vehicle. Waiting for admin confirmation.</Text>
+            <Text style={styles.finalPriceText}>AED {currentPrice.toLocaleString()}</Text>
+            <Text style={styles.offerSubText}>You may continue to book your car now</Text>
           </View>
         );
       }
-      if (bookingStatus === 'intransfer') {
-        return (
-          <View style={styles.statusCard}>
-            <View style={styles.offerRow}>
-              <View style={styles.offerItem}>
-                <Text style={styles.offerLabel}>Seller Expectation</Text>
-                <Text style={styles.offerValue}>AED {sellerExpectation.toLocaleString()}</Text>
-              </View>
-              <View style={styles.offerItem}>
-                <Text style={styles.offerLabel}>My Bid (Highest)</Text>
-                <Text style={[styles.offerValue, { color: '#cadb2a' }]}>AED {currentPrice.toLocaleString()}</Text>
-              </View>
-            </View>
-            <MaterialCommunityIcons name="truck-delivery" size={40} color="#00a8ff" style={{ marginBottom: 10 }} />
-            <Text style={styles.statusTitle}>Vehicle In-Transfer</Text>
-            <Text style={styles.statusSubText}>Your vehicle is currently being transferred. Tracking info will be updated soon.</Text>
-          </View>
-        );
-      }
-      if (bookingStatus === 'delivered') {
-        return (
-          <View style={styles.statusCard}>
-            <View style={styles.offerRow}>
-              <View style={styles.offerItem}>
-                <Text style={styles.offerLabel}>Seller Expectation</Text>
-                <Text style={styles.offerValue}>AED {sellerExpectation.toLocaleString()}</Text>
-              </View>
-              <View style={styles.offerItem}>
-                <Text style={styles.offerLabel}>My Bid</Text>
-                <Text style={[styles.offerValue, { color: '#cadb2a' }]}>AED {currentPrice.toLocaleString()}</Text>
-              </View>
-            </View>
-            <Feather name="check-circle" size={40} color="#cadb2a" style={{ marginBottom: 10 }} />
-            <Text style={styles.statusTitle}>Vehicle Delivered</Text>
-            <Text style={styles.statusSubText}>Your vehicle has been successfully delivered. Enjoy your ride!</Text>
-          </View>
-        );
-      }
-    }
-    if (viewType === 'upcoming') {
-      return (
-        <View style={styles.countdownGrid}>
-          <View style={styles.countBox}><Text style={styles.countNum}>{countdown.days}</Text><Text style={styles.countLabel}>Days</Text></View>
-          <View style={styles.countBox}><Text style={styles.countNum}>{String(countdown.hours).padStart(2, '0')}</Text><Text style={styles.countLabel}>Hrs</Text></View>
-          <View style={styles.countBox}><Text style={styles.countNum}>{String(countdown.minutes).padStart(2, '0')}</Text><Text style={styles.countLabel}>Min</Text></View>
-          <View style={styles.countBox}><Text style={styles.countNum}>{String(countdown.seconds).padStart(2, '0')}</Text><Text style={styles.countLabel}>Sec</Text></View>
-        </View>
-      );
-    }
-    if (viewType === 'live') {
-      return (
-        <View style={styles.countdownGrid}>
-          <View style={styles.countBox}><Text style={styles.countNum}>{countdown.days}</Text><Text style={styles.countLabel}>Days</Text></View>
-          <View style={styles.countBox}><Text style={styles.countNum}>{String(countdown.hours).padStart(2, '0')}</Text><Text style={styles.countLabel}>Hrs</Text></View>
-          <View style={styles.countBox}><Text style={styles.countNum}>{String(countdown.minutes).padStart(2, '0')}</Text><Text style={styles.countLabel}>Min</Text></View>
-          <View style={styles.countBox}><Text style={styles.countNum}>{String(countdown.seconds).padStart(2, '0')}</Text><Text style={styles.countLabel}>Sec</Text></View>
-        </View>
-      );
-    } else {
-      return (
-        <View style={styles.offerCard}>
-          <Text style={styles.offerTitle}>Your Offer has been Accepted</Text>
-          <View style={styles.offerRow}>
-            <View style={styles.offerItem}>
-              <Text style={styles.offerLabel}>Seller Expectation</Text>
-              <Text style={styles.offerValue}>AED {sellerExpectation.toLocaleString()}</Text>
-            </View>
-            <View style={styles.offerItem}>
-              <Text style={styles.offerLabel}>My Bid (Highest)</Text>
-              <Text style={[styles.offerValue, { color: '#cadb2a' }]}>AED {currentPrice.toLocaleString()}</Text>
-            </View>
-          </View>
-          <Text style={styles.finalPriceText}>AED {currentPrice.toLocaleString()}</Text>
-          <Text style={styles.offerSubText}>You may continue to book your car now</Text>
-        </View>
-      );
-    }
   };
 
   return (
@@ -747,7 +828,7 @@ export default function LiveCarAuctionScreen() {
               )}
             </View>
 
-            {/* 🟢 BANNER SLIDER WITH OVERLAY */}
+            {/* Banner Slider */}
             <View style={{ height: 250, marginBottom: 15 }}>
               <ScrollView
                 horizontal
@@ -759,44 +840,33 @@ export default function LiveCarAuctionScreen() {
                 }}
               >
                 {imageList.map((img, index) => (
-                  <TouchableOpacity key={index} onPress={() => handleImageOpen(img, false)}>
+                  <TouchableOpacity key={index} onPress={() => handleImageOpen(imageList, index, false)}>
                     <Image source={{ uri: img }} style={{ width: width, height: 250, resizeMode: 'cover' }} />
                   </TouchableOpacity>
                 ))}
               </ScrollView>
 
-
-              {/* 🟢 CUSTOM OVERLAY CONTENT */}
               <LinearGradient colors={['transparent', 'rgba(0,0,0,0.8)', 'rgba(0,0,0,0.95)']} style={styles.imageOverlay}>
                 <View style={styles.bannerContent}>
-
-                  {/* Top Row: Details (Left) + Prices (Right) */}
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', }}>
-
-                    {/* Left: Brand & Model */}
                     <View style={{ flex: 1, paddingRight: 5 }}>
                       <Text style={styles.carBrand}>{vehicle.brand?.name}</Text>
                       <Text style={styles.carModel} numberOfLines={2} adjustsFontSizeToFit>
                         {vehicle.vehicle_model?.name} {vehicle.year}
                       </Text>
                     </View>
-
-                    {/* Right: Prices */}
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                       <View style={{ alignItems: 'flex-end' }}>
                         <Text style={[styles.bannerPriceLabel, { textAlign: 'right' }]}>Highest / Current</Text>
                         <Text style={styles.bannerPriceValue}>AED {currentPrice.toLocaleString()}</Text>
                       </View>
-
                       <View style={[styles.bannerDivider, { marginHorizontal: 10, height: 25 }]} />
-
                       <View style={{ alignItems: 'flex-end' }}>
                         <Text style={[styles.bannerPriceLabel, { textAlign: 'right' }]}>Seller Exp.</Text>
                         <Text style={styles.bannerPriceValue}>AED {sellerExpectation.toLocaleString()}</Text>
                       </View>
                     </View>
                   </View>
-
                 </View>
               </LinearGradient>
               <View style={styles.paginationContainer}>
@@ -843,7 +913,6 @@ export default function LiveCarAuctionScreen() {
             </View>
           </View>
 
-          {/* 🟢 UPDATED: Modern List for Vehicle Details */}
           <View onLayout={(e) => handleLayout(e, 'Details')} style={styles.sectionContainer}>
             <Text style={styles.sectionTitle}>Vehicle Details</Text>
             <View style={styles.detailsListContainer}>
@@ -924,7 +993,7 @@ export default function LiveCarAuctionScreen() {
 
               {latestInspection.damage_file_path && (
                 <View style={{ marginTop: 20 }}>
-                  <TouchableOpacity onPress={() => handleImageOpen(latestInspection.damage_file_path || '', true)} style={styles.damageMapContainer}>
+                  <TouchableOpacity onPress={() => handleImageOpen([latestInspection.damage_file_path], 0, true)} style={styles.damageMapContainer}>
                     <Image source={{ uri: latestInspection.damage_file_path }} style={styles.damageMapImage} resizeMode="cover" />
                   </TouchableOpacity>
                 </View>
@@ -978,12 +1047,11 @@ export default function LiveCarAuctionScreen() {
                 </View>
               )}
 
-              {/* 🟢 NEW: INSPECTION SLIDER (Full Width, Paging Enabled) */}
+              {/* Inspection Slider */}
               {latestInspection.images && latestInspection.images.length > 0 && (
                 <View style={{ marginTop: 20 }}>
                   <Text style={[styles.sectionTitle, { paddingHorizontal: 0 }]}>Inspection Gallery</Text>
 
-                  {/* Slider Container with negative margin to stretch edge-to-edge */}
                   <View style={{ height: 250, width: width, marginLeft: -16 }}>
                     <ScrollView
                       horizontal
@@ -999,7 +1067,12 @@ export default function LiveCarAuctionScreen() {
                         return (
                           <TouchableOpacity
                             key={idx}
-                            onPress={() => handleImageOpen(uri, false)}
+                            onPress={() => {
+                                const inspectionUrls = latestInspection.images.map((im: any) => 
+                                    im.path.startsWith('http') ? im.path : `${STORAGE_BASE_URL}${im.path}`
+                                );
+                                handleImageOpen(inspectionUrls, idx, false);
+                            }}
                             activeOpacity={0.9}
                           >
                             <Image
@@ -1011,7 +1084,6 @@ export default function LiveCarAuctionScreen() {
                       })}
                     </ScrollView>
 
-                    {/* Pagination Dots */}
                     <View style={styles.paginationContainer}>
                       {latestInspection.images.map((_: any, i: number) => (
                         <View key={i} style={[styles.dot, i === activeInspectionIndex && styles.activeDot]} />
@@ -1035,7 +1107,7 @@ export default function LiveCarAuctionScreen() {
           <View style={{ height: height * 0.6 }} />
         </ScrollView>
 
-        {/* Footer Area */}
+        {/* Footer */}
         {bookingStatus !== 'none' ? (
           <View style={styles.negotiationFooter}>
             <View style={styles.footerBtnRow}>
@@ -1105,9 +1177,10 @@ export default function LiveCarAuctionScreen() {
         )}
 
         <ImagePreviewModal
-          visible={!!previewImage}
-          imageUrl={previewImage || ''}
-          onClose={() => setPreviewImage(null)}
+          visible={!!previewImages.length}
+          images={previewImages}
+          initialIndex={previewIndex}
+          onClose={() => setPreviewImages([])}
           isWhiteBackground={isPreviewMap}
         />
 
@@ -1123,7 +1196,6 @@ export default function LiveCarAuctionScreen() {
 }
 
 const styles = StyleSheet.create({
-  // ... (All previous styles kept) ...
   container: { flex: 1, backgroundColor: '#000' },
   loadingContainer: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
   gradient: { flex: 1 },
@@ -1137,23 +1209,13 @@ const styles = StyleSheet.create({
   smallTimerBadge: { backgroundColor: '#cadb2a', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 8 },
   smallTimerText: { color: '#000', fontWeight: 'bold', fontSize: 14 },
 
-  imageCard: { marginHorizontal: 16, height: 220, borderRadius: 16, overflow: 'hidden', marginBottom: 10, backgroundColor: '#111', borderWidth: 1, borderColor: '#222' },
-
-  // 🟢 NEW STYLES FOR BANNER LAYOUT
   imageOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 15, paddingTop: 60, justifyContent: 'flex-end' },
   bannerContent: { flexDirection: 'column', gap: 4, marginBottom: 12 },
   carBrand: { color: '#cadb2a', fontSize: 14, fontWeight: 'bold', fontFamily: 'Poppins' },
   carModel: { color: '#fff', fontSize: 22, fontWeight: 'bold', fontFamily: 'Poppins' },
-  bannerBadgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingLeft: 16, paddingBottom: 20 },
-  bannerBadge: { backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 100, paddingHorizontal: 10, paddingVertical: 4 },
-  bannerBadgeText: { fontFamily: 'Poppins', fontSize: 10, color: '#ffffff', textTransform: 'capitalize' },
-
-  bannerPriceRow: { flexDirection: 'row', alignItems: 'flex-end', marginTop: 5 },
   bannerPriceLabel: { color: '#aaa', fontSize: 10, fontFamily: 'Poppins', marginBottom: 2 },
   bannerPriceValue: { color: '#fff', fontSize: 16, fontWeight: 'bold', fontFamily: 'Lato' },
   bannerDivider: { width: 1, height: 30, backgroundColor: 'rgba(255,255,255,0.3)', marginHorizontal: 15 },
-
-  // currentBidOverlay style removed as it's replaced by bannerPriceRow
 
   countdownGrid: { flexDirection: 'row', justifyContent: 'center', gap: 12, marginBottom: 25 },
   countBox: { width: 65, height: 65, backgroundColor: '#111', borderRadius: 12, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#333' },
@@ -1175,7 +1237,6 @@ const styles = StyleSheet.create({
   specTitle: { color: '#fff', fontSize: 14, fontWeight: 'bold', fontFamily: 'Poppins' },
   specSub: { color: '#888', fontSize: 12, marginTop: 4, fontFamily: 'Poppins' },
 
-  // 🟢 NEW LIST STYLES
   detailsListContainer: { backgroundColor: '#111', borderRadius: 12, paddingHorizontal: 16, borderWidth: 1, borderColor: '#222' },
   detailListRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#222', alignItems: 'center' },
   detailListLabel: { color: '#888', fontFamily: 'Poppins', fontSize: 14 },
@@ -1226,11 +1287,21 @@ const styles = StyleSheet.create({
   placeBidBtn: { backgroundColor: '#cadb2a', height: 55, borderRadius: 14, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
   placeBidBtnText: { color: '#000', fontSize: 18, fontWeight: 'bold' },
   minIncText: { color: '#666', fontSize: 11, textAlign: 'center', marginTop: 15 },
+  
   previewContainer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center' },
   previewContainerWhite: { backgroundColor: '#fff' },
   videoModalContainer: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
   videoCloseBtn: { position: 'absolute', top: 50, right: 30, zIndex: 20, padding: 10 },
   fullscreenVideo: { width: width, height: height * 0.8 },
+  
+  previewPagination: { flexDirection: 'row', justifyContent: 'center', position: 'absolute', bottom: 40, width: '100%' },
+  paginationContainer: { flexDirection: 'row', justifyContent: 'center', position: 'absolute', bottom: 10, width: '100%' },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.3)', marginHorizontal: 4 },
+  activeDot: { backgroundColor: '#cadb2a', width: 20 },
+  
+  previewCloseBtn: { position: 'absolute', top: 50, right: 30, zIndex: 20, padding: 8, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20 },
+  footerDateText: { color: '#666', fontSize: 12, marginTop: 10, fontFamily: 'Poppins', fontStyle: 'italic' },
+  
   offerCard: { marginHorizontal: 16, marginBottom: 20, padding: 16, backgroundColor: '#111', borderRadius: 12, borderWidth: 1, borderColor: '#cadb2a' },
   offerTitle: { color: '#cadb2a', fontSize: 16, fontWeight: 'bold', textAlign: 'center', marginBottom: 15, fontFamily: 'Poppins' },
   offerRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 },
@@ -1239,6 +1310,7 @@ const styles = StyleSheet.create({
   offerValue: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
   finalPriceText: { color: '#fff', fontSize: 24, fontWeight: 'bold', textAlign: 'center', marginVertical: 10, fontFamily: 'Lato' },
   offerSubText: { color: '#888', fontSize: 12, textAlign: 'center', fontFamily: 'Poppins' },
+  
   negotiationFooter: { flexDirection: 'column', alignItems: 'center', padding: 16, paddingBottom: 12, backgroundColor: '#000', borderTopWidth: 1, borderTopColor: '#222' },
   footerBtnRow: { flexDirection: 'row', width: '100%', justifyContent: 'space-between' },
   footerBtnOutline: { flex: 1, borderWidth: 1, borderColor: '#fff', borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingVertical: 12, marginRight: 10 },
@@ -1249,17 +1321,11 @@ const styles = StyleSheet.create({
   adminFeeBold: { color: '#fff', fontWeight: 'bold' },
   lateInfoRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
   lateInfoText: { color: '#ff6b6b', fontSize: 10, textDecorationLine: 'underline', fontFamily: 'Poppins' },
+  accordionContainer: { marginBottom: 10, borderWidth: 1, borderColor: '#222', borderRadius: 8, overflow: 'hidden' },
+  accordionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 15, backgroundColor: '#111' },
+  accordionTitle: { color: '#fff', fontSize: 14, fontWeight: 'bold', fontFamily: 'Poppins' },
+  accordionContent: { padding: 15, backgroundColor: '#000' },
   statusCard: { backgroundColor: '#111', marginHorizontal: 16, marginBottom: 20, borderRadius: 12, padding: 20, alignItems: 'center', borderWidth: 1, borderColor: '#333' },
   statusTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold', fontFamily: 'Poppins', marginBottom: 8, textAlign: 'center' },
   statusSubText: { color: '#aaa', fontSize: 13, fontFamily: 'Poppins', textAlign: 'center', lineHeight: 20 },
-  commentContainer: { marginBottom: 15, paddingHorizontal: 5, marginTop: 20 },
-  accordionContainer: { marginBottom: 10, backgroundColor: '#111', borderRadius: 10, overflow: 'hidden', borderWidth: 1, borderColor: '#222' },
-  accordionHeader: { flexDirection: 'row', justifyContent: 'space-between', padding: 15, alignItems: 'center', backgroundColor: '#1a1a1a' },
-  accordionTitle: { color: '#fff', fontSize: 14, fontWeight: 'bold', fontFamily: 'Poppins' },
-  accordionContent: { padding: 15, backgroundColor: '#000' },
-  paginationContainer: { flexDirection: 'row', justifyContent: 'center', position: 'absolute', bottom: 10, width: '100%' },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.3)', marginHorizontal: 4 },
-  activeDot: { backgroundColor: '#cadb2a', width: 20 },
-  previewCloseBtn: { position: 'absolute', top: 50, right: 30, zIndex: 20 },
-  footerDateText: { color: '#666', fontSize: 12, marginTop: 10, fontFamily: 'Poppins', fontStyle: 'italic' },
 });

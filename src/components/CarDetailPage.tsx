@@ -12,9 +12,11 @@ import {
   LayoutChangeEvent,
   NativeSyntheticEvent,
   NativeScrollEvent,
-  Linking,
-  TextInput, // 🟢 Imported
+  Linking, // 🟢 Used for WhatsApp
+  TextInput,
 } from 'react-native';
+// 🟢 Import FlatList from gesture-handler for better gesture support
+import { FlatList } from 'react-native-gesture-handler';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -23,6 +25,7 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
+  runOnJS,
 } from "react-native-reanimated";
 import {
   Gesture,
@@ -36,7 +39,7 @@ import { RootStackParamList } from '../navigation/AppNavigator';
 import apiService from '../services/ApiService';
 import * as Models from '../data/modal';
 import { useAlert } from '../context/AlertContext';
-import { useAuth } from '../context/AuthContext'; // 🟢 Added Auth
+import { useAuth } from '../context/AuthContext';
 
 type CarDetailRouteProp = RouteProp<RootStackParamList, 'CarDetailPage'>;
 type CarDetailNavigationProp = NativeStackNavigationProp<RootStackParamList, 'CarDetailPage'>;
@@ -44,10 +47,13 @@ type CarDetailNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Ca
 const { width, height } = Dimensions.get('window');
 const STORAGE_BASE_URL = 'https://api.caartl.com/storage/';
 const TAB_BAR_HEIGHT = 60;
+const WHATSAPP_NUMBER = '923094174580'; // 🟢 Target Number
 
-// ... (Keep Shared Components: ZoomableImage, ImagePreviewModal, VideoPlayerModal, SpecCard, etc. same as before) ...
-
-const ZoomableImage = ({ uri }: { uri: string }) => {
+// ==========================================
+// 1. UPDATED ZOOMABLE IMAGE (Sliding Compatible)
+// ==========================================
+const ZoomableImage = ({ uri, onRequestScrollToggle }: { uri: string, onRequestScrollToggle: (locked: boolean) => void }) => {
+  const [isZoomed, setIsZoomed] = useState(false);
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
   const translateX = useSharedValue(0);
@@ -55,7 +61,23 @@ const ZoomableImage = ({ uri }: { uri: string }) => {
   const savedTranslateX = useSharedValue(0);
   const savedTranslateY = useSharedValue(0);
 
+  const resetZoom = () => {
+    'worklet';
+    scale.value = withTiming(1);
+    savedScale.value = 1;
+    translateX.value = withTiming(0);
+    translateY.value = withTiming(0);
+    savedTranslateX.value = 0;
+    savedTranslateY.value = 0;
+    runOnJS(setIsZoomed)(false);
+    runOnJS(onRequestScrollToggle)(false);
+  };
+
   const pinchGesture = Gesture.Pinch()
+    .onStart(() => {
+      runOnJS(setIsZoomed)(true);
+      runOnJS(onRequestScrollToggle)(true);
+    })
     .onUpdate((e) => {
       scale.value = savedScale.value * e.scale;
       if (scale.value < 1) scale.value = 1;
@@ -63,14 +85,19 @@ const ZoomableImage = ({ uri }: { uri: string }) => {
     })
     .onEnd(() => {
       savedScale.value = scale.value;
+      if (scale.value <= 1.1) {
+        resetZoom();
+      }
     });
 
   const panGesture = Gesture.Pan()
     .onUpdate((e) => {
-      const maxTranslateX = (width * (scale.value - 1)) / 2;
-      const maxTranslateY = (height * 0.8 * (scale.value - 1)) / 2;
-      translateX.value = Math.min(Math.max(savedTranslateX.value + e.translationX, -maxTranslateX), maxTranslateX);
-      translateY.value = Math.min(Math.max(savedTranslateY.value + e.translationY, -maxTranslateY), maxTranslateY);
+      if (scale.value > 1.1) {
+        const maxTranslateX = (width * (scale.value - 1)) / 2;
+        const maxTranslateY = (height * 0.8 * (scale.value - 1)) / 2;
+        translateX.value = Math.min(Math.max(savedTranslateX.value + e.translationX, -maxTranslateX), maxTranslateX);
+        translateY.value = Math.min(Math.max(savedTranslateY.value + e.translationY, -maxTranslateY), maxTranslateY);
+      }
     })
     .onEnd(() => {
       savedTranslateX.value = translateX.value;
@@ -80,15 +107,20 @@ const ZoomableImage = ({ uri }: { uri: string }) => {
   const doubleTapGesture = Gesture.Tap()
     .numberOfTaps(2)
     .onEnd(() => {
-      scale.value = withTiming(1);
-      translateX.value = withTiming(0);
-      translateY.value = withTiming(0);
-      savedScale.value = 1;
-      savedTranslateX.value = 0;
-      savedTranslateY.value = 0;
+      if (scale.value > 1.1) {
+        resetZoom();
+      } else {
+        scale.value = withTiming(2);
+        savedScale.value = 2;
+        runOnJS(setIsZoomed)(true);
+        runOnJS(onRequestScrollToggle)(true);
+      }
     });
 
-  const composed = Gesture.Simultaneous(pinchGesture, panGesture, doubleTapGesture);
+  const composed = isZoomed
+    ? Gesture.Simultaneous(pinchGesture, panGesture, doubleTapGesture)
+    : Gesture.Simultaneous(pinchGesture, doubleTapGesture);
+
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [
       { translateX: translateX.value },
@@ -99,28 +131,90 @@ const ZoomableImage = ({ uri }: { uri: string }) => {
 
   return (
     <GestureDetector gesture={composed}>
-      <Animated.View style={{ width, height: height * 0.8, justifyContent: 'center', alignItems: 'center' }}>
+      <Animated.View style={{ width, height, justifyContent: 'center', alignItems: 'center' }}>
         <Animated.Image
           source={{ uri }}
-          style={[{ width: '100%', height: '100%', resizeMode: 'contain' }, animatedStyle]}
+          style={[{ width: '100%', height: '80%', resizeMode: 'contain' }, animatedStyle]}
         />
       </Animated.View>
     </GestureDetector>
   );
 };
 
-const ImagePreviewModal = ({ visible, imageUrl, onClose, isWhiteBackground = false }: any) => (
-  <Modal visible={visible} transparent={true} onRequestClose={onClose} animationType="fade">
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <View style={[styles.previewContainer, isWhiteBackground && styles.previewContainerWhite]}>
-        <TouchableOpacity style={styles.previewCloseBtn} onPress={onClose} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
-          <Feather name="x" size={30} color={isWhiteBackground ? "#000" : "#fff"} />
-        </TouchableOpacity>
-        <ZoomableImage uri={imageUrl} />
-      </View>
-    </GestureHandlerRootView>
-  </Modal>
-);
+// ==========================================
+// 2. UPDATED GALLERY MODAL (FlatList)
+// ==========================================
+const ImagePreviewModal = ({ visible, images = [], initialIndex = 0, onClose, isWhiteBackground = false }: any) => {
+  const flatListRef = useRef<FlatList>(null);
+  const [currentIndex, setCurrentIndex] = useState(initialIndex);
+  const [scrollEnabled, setScrollEnabled] = useState(true);
+
+  useEffect(() => {
+    if (visible && images.length > 0) {
+      setCurrentIndex(initialIndex);
+      setScrollEnabled(true);
+      setTimeout(() => {
+        flatListRef.current?.scrollToIndex({ index: initialIndex, animated: false });
+      }, 50);
+    }
+  }, [visible, initialIndex, images]);
+
+  const onScroll = (e: any) => {
+    const idx = Math.round(e.nativeEvent.contentOffset.x / width);
+    setCurrentIndex(idx);
+  };
+
+  const handleScrollToggle = (locked: boolean) => {
+    setScrollEnabled(!locked);
+  };
+
+  return (
+    <Modal visible={visible} transparent={true} onRequestClose={onClose} animationType="fade">
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <View style={[styles.previewContainer, isWhiteBackground && styles.previewContainerWhite]}>
+          <TouchableOpacity 
+            style={styles.previewCloseBtn} 
+            onPress={onClose} 
+            hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+            zIndex={20}
+          >
+            <Feather name="x" size={30} color={isWhiteBackground ? "#000" : "#fff"} />
+          </TouchableOpacity>
+
+          <FlatList
+            ref={flatListRef}
+            data={images}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            scrollEnabled={scrollEnabled} 
+            keyExtractor={(_, index) => index.toString()}
+            onMomentumScrollEnd={onScroll}
+            getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
+            initialScrollIndex={initialIndex}
+            waitFor={scrollEnabled ? undefined : undefined} 
+            renderItem={({ item }) => (
+              <View style={{ width: width, height: height, justifyContent: 'center' }}>
+                <ZoomableImage 
+                  uri={item} 
+                  onRequestScrollToggle={handleScrollToggle}
+                />
+              </View>
+            )}
+          />
+
+          {images.length > 1 && (
+            <View style={styles.previewPagination}>
+              {images.map((_: any, i: number) => (
+                <View key={i} style={[styles.dot, i === currentIndex && styles.activeDot]} />
+              ))}
+            </View>
+          )}
+        </View>
+      </GestureHandlerRootView>
+    </Modal>
+  );
+};
 
 const VideoPlayerModal = ({ visible, videoUrl, onClose }: any) => (
   <Modal visible={visible} transparent={true} onRequestClose={onClose} animationType="slide">
@@ -209,7 +303,7 @@ export const CarDetailPage = () => {
   const route = useRoute<CarDetailRouteProp>();
   const { carId } = route.params;
 
-  const { user } = useAuth(); // 🟢 Get User
+  const { user } = useAuth();
   const { showAlert } = useAlert();
   const [loading, setLoading] = useState(true);
 
@@ -226,9 +320,11 @@ export const CarDetailPage = () => {
   const [activeAccordion, setActiveAccordion] = useState<string | null>('Engine');
   const [activeTab, setActiveTab] = useState('Overview');
 
-  // Media
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  // Media States
+  const [previewImages, setPreviewImages] = useState<string[]>([]);
+  const [previewIndex, setPreviewIndex] = useState(0);
   const [isPreviewMap, setIsPreviewMap] = useState(false);
+  
   const [videoModalVisible, setVideoModalVisible] = useState(false);
   const [currentVideoUrl, setCurrentVideoUrl] = useState<string | null>(null);
 
@@ -238,6 +334,9 @@ export const CarDetailPage = () => {
   const [inqEmail, setInqEmail] = useState('');
   const [inqPhone, setInqPhone] = useState('');
   const [inqAddress, setInqAddress] = useState('');
+  // 🟢 New Comment State
+  const [inqComment, setInqComment] = useState('');
+  
   const [submittingInquiry, setSubmittingInquiry] = useState(false);
 
   // Scroll
@@ -274,7 +373,6 @@ export const CarDetailPage = () => {
     fetchData();
   }, [carId]);
 
-  // Pre-fill Inquiry Form
   useEffect(() => {
     if (user) {
       setInqName(user.name);
@@ -336,8 +434,9 @@ export const CarDetailPage = () => {
     navigation.navigate('ViewBooking', { vehicleId: carId });
   };
 
-  const handleImageOpen = (uri: string, isMap: boolean = false) => {
-    setPreviewImage(uri);
+  const handleImageOpen = (imagesList: string[], index: number, isMap: boolean = false) => {
+    setPreviewImages(imagesList);
+    setPreviewIndex(index);
     setIsPreviewMap(isMap);
   };
 
@@ -346,33 +445,46 @@ export const CarDetailPage = () => {
     setVideoModalVisible(true);
   };
 
-  // 🟢 Handle Inquiry Submission
+  // 🟢 UPDATED: Send Inquiry via WhatsApp
   const handleSubmitInquiry = async () => {
-    if (!inqName || !inqEmail || !inqPhone) {
-      showAlert("Error", "Please fill in Name, Email and Phone.");
+    if (!inqName) {
+      showAlert("Required", "Please enter your Name.");
       return;
     }
 
     setSubmittingInquiry(true);
-    const formData = new FormData();
-    formData.append('vehicle_id', String(carId));
-    formData.append('name', inqName);
-    formData.append('email', inqEmail);
-    formData.append('phone', inqPhone);
-    if (inqAddress) formData.append('address', inqAddress);
+
+    const carName = `${vehicle.brand?.name || ''} ${vehicle.vehicle_model?.name || ''} ${vehicle.year || ''}`;
+    
+    // Construct Message
+    const message = `Hello, I am interested in this car:
+*${carName}* (ID: ${carId})
+
+*My Details:*
+Name: ${inqName}
+Email: ${inqEmail || 'N/A'}
+Phone: ${inqPhone || 'N/A'}
+Address: ${inqAddress || 'N/A'}
+
+*Comment:*
+${inqComment}`;
+
+    // Create WhatsApp Link
+    const url = `whatsapp://send?phone=${WHATSAPP_NUMBER}&text=${encodeURIComponent(message)}`;
 
     try {
-      const result = await apiService.inquireCar(formData);
-      if (result.success) {
-        showAlert("Success", "Inquiry sent successfully!");
-        setInquireVisible(false);
-      } else {
-        showAlert("Error", result.data.message || "Failed to send inquiry.");
-      }
-    } catch (e) {
-      showAlert("Error", "Network error.");
+        const supported = await Linking.canOpenURL(url);
+        if (supported) {
+            await Linking.openURL(url);
+            setInquireVisible(false); // Close modal on success
+        } else {
+            showAlert("Error", "WhatsApp is not installed on this device.");
+        }
+    } catch (error) {
+        console.error("WhatsApp Error", error);
+        showAlert("Error", "Could not open WhatsApp.");
     } finally {
-      setSubmittingInquiry(false);
+        setSubmittingInquiry(false);
     }
   };
 
@@ -454,7 +566,7 @@ export const CarDetailPage = () => {
             onPress={() => {
               const path = item.media.path.startsWith('http') ? item.media.path : `${STORAGE_BASE_URL}${item.media.path}`;
               if (item.media.file_type === 'video') handleVideoOpen(path);
-              else handleImageOpen(path, false);
+              else handleImageOpen([path], 0, false); // Handle single image
             }}
             style={styles.mediaBtnRight}
           >
@@ -503,7 +615,6 @@ export const CarDetailPage = () => {
   const renderStatusCard = () => {
     if (bookingStatus !== 'none') {
       const statusColor = bookingStatus === 'pending_payment' ? '#ffaa00' : (bookingStatus === 'intransfer' ? '#00a8ff' : '#cadb2a');
-      // Use only supported icon names
       const statusIcon = bookingStatus === 'pending_payment' ? 'clock' : (bookingStatus === 'intransfer' ? 'truck' : 'check-circle');
       const statusIconComponent = <Feather name={statusIcon} size={40} color={statusColor} style={{ marginBottom: 10 }} />;
 
@@ -573,7 +684,7 @@ export const CarDetailPage = () => {
                 }}
               >
                 {imageList.map((img, index) => (
-                  <TouchableOpacity key={index} onPress={() => handleImageOpen(img, false)}>
+                  <TouchableOpacity key={index} onPress={() => handleImageOpen(imageList, index, false)}>
                     <Image source={{ uri: img }} style={{ width: width, height: 250, resizeMode: 'cover' }} />
                   </TouchableOpacity>
                 ))}
@@ -720,7 +831,7 @@ export const CarDetailPage = () => {
 
               {latestInspection.damage_file_path && (
                 <View style={{ marginTop: 20 }}>
-                  <TouchableOpacity onPress={() => handleImageOpen(latestInspection.damage_file_path || '', true)} style={styles.damageMapContainer}>
+                  <TouchableOpacity onPress={() => handleImageOpen([latestInspection.damage_file_path], 0, true)} style={styles.damageMapContainer}>
                     <Image source={{ uri: latestInspection.damage_file_path }} style={styles.damageMapImage} resizeMode="cover" />
                   </TouchableOpacity>
                 </View>
@@ -793,7 +904,12 @@ export const CarDetailPage = () => {
                         return (
                           <TouchableOpacity
                             key={idx}
-                            onPress={() => handleImageOpen(uri, false)}
+                            onPress={() => {
+                                const inspectionUrls = latestInspection.images.map((im: any) => 
+                                    im.path.startsWith('http') ? im.path : `${STORAGE_BASE_URL}${im.path}`
+                                );
+                                handleImageOpen(inspectionUrls, idx, false);
+                            }}
                             activeOpacity={0.9}
                           >
                             <Image source={{ uri }} style={{ width: width, height: 250, resizeMode: 'cover' }} />
@@ -833,7 +949,7 @@ export const CarDetailPage = () => {
               </TouchableOpacity>
             ) : null}
 
-            {/* 🟢 NEW: Inquire Now Button */}
+            {/* Inquire Now Button */}
             <TouchableOpacity
               style={styles.footerBtnOutline}
               onPress={() => setInquireVisible(true)}
@@ -851,10 +967,12 @@ export const CarDetailPage = () => {
           </View>
         )}
 
+        {/* 🟢 UPDATED: Gallery Modal (Sliding) */}
         <ImagePreviewModal
-          visible={!!previewImage}
-          imageUrl={previewImage || ''}
-          onClose={() => setPreviewImage(null)}
+          visible={!!previewImages.length}
+          images={previewImages}
+          initialIndex={previewIndex}
+          onClose={() => setPreviewImages([])}
           isWhiteBackground={isPreviewMap}
         />
 
@@ -864,7 +982,7 @@ export const CarDetailPage = () => {
           onClose={() => setVideoModalVisible(false)}
         />
 
-        {/* 🟢 NEW: Inquiry Modal */}
+        {/* Inquiry Modal */}
         <Modal visible={inquireVisible} transparent animationType="slide" onRequestClose={() => setInquireVisible(false)}>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
@@ -888,12 +1006,29 @@ export const CarDetailPage = () => {
                 <Text style={styles.label}>Address (Optional)</Text>
                 <TextInput style={styles.input} value={inqAddress} onChangeText={setInqAddress} placeholderTextColor="#666" placeholder="Your Address" />
 
+                <Text style={styles.label}>Comment (Optional)</Text>
+                <TextInput 
+                  style={[styles.input, { height: 80, textAlignVertical: 'top' }]} 
+                  value={inqComment} 
+                  onChangeText={setInqComment} 
+                  placeholderTextColor="#666" 
+                  placeholder="Any questions?" 
+                  multiline
+                />
+
                 <TouchableOpacity
-                  style={styles.submitBtn}
+                  style={[styles.submitBtn, { flexDirection: 'row', justifyContent: 'center' }]}
                   onPress={handleSubmitInquiry}
                   disabled={submittingInquiry}
                 >
-                  {submittingInquiry ? <ActivityIndicator color="#000" /> : <Text style={styles.submitBtnText}>Submit Inquiry</Text>}
+                  {submittingInquiry ? (
+                    <ActivityIndicator color="#000" />
+                  ) : (
+                    <>
+                      <FontAwesome5 name="whatsapp" size={18} color="#000" style={{ marginRight: 8 }} />
+                      <Text style={styles.submitBtnText}>Send via WhatsApp</Text>
+                    </>
+                  )}
                 </TouchableOpacity>
               </ScrollView>
             </View>
@@ -921,6 +1056,13 @@ const styles = StyleSheet.create({
   bannerPriceLabel: { color: '#aaa', fontSize: 10, fontFamily: 'Poppins', marginBottom: 2 },
   bannerPriceValue: { color: '#fff', fontSize: 16, fontWeight: 'bold', fontFamily: 'Lato' },
   bannerDivider: { width: 1, height: 30, backgroundColor: 'rgba(255,255,255,0.3)', marginHorizontal: 15 },
+  
+  // 🟢 Preview Styles (Copied from Auction Screen)
+  previewContainer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center' },
+  previewContainerWhite: { backgroundColor: '#fff' },
+  previewCloseBtn: { position: 'absolute', top: 50, right: 30, zIndex: 20, padding: 8, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20 },
+  previewPagination: { flexDirection: 'row', justifyContent: 'center', position: 'absolute', bottom: 40, width: '100%' },
+  
   paginationContainer: { flexDirection: 'row', justifyContent: 'center', position: 'absolute', bottom: 10, width: '100%' },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.3)', marginHorizontal: 4 },
   activeDot: { backgroundColor: '#cadb2a', width: 20 },
@@ -988,24 +1130,18 @@ const styles = StyleSheet.create({
   negotiationFooter: { flexDirection: 'column', alignItems: 'center', padding: 16, paddingBottom: 12, backgroundColor: '#000', borderTopWidth: 1, borderTopColor: '#222' },
   footerBtnFilled: { width: '100%', backgroundColor: '#cadb2a', borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingVertical: 15 },
   footerBtnTextFilled: { color: '#000', fontSize: 16, fontWeight: 'bold', fontFamily: 'Poppins' },
-
-  // 🟢 New Footer Outline Button
   footerBtnOutline: { width: '100%', borderWidth: 1, borderColor: '#cadb2a', borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingVertical: 15, marginTop: 10 },
   footerBtnTextOutline: { color: '#cadb2a', fontSize: 16, fontWeight: 'bold', fontFamily: 'Poppins' },
-
   adminFeeText: { color: '#888', fontSize: 10, marginTop: 12, fontFamily: 'Poppins' },
   adminFeeBold: { color: '#fff', fontWeight: 'bold' },
   commentBox: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: '#111', padding: 16, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: '#222' },
 
   // Modal
-  previewContainer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center' },
-  previewContainerWhite: { backgroundColor: '#fff' },
-  previewCloseBtn: { position: 'absolute', top: 50, right: 30, zIndex: 20 },
   videoModalContainer: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
   videoCloseBtn: { position: 'absolute', top: 50, right: 30, zIndex: 20, padding: 10 },
   fullscreenVideo: { width: width, height: height * 0.8 },
 
-  // 🟢 Inquiry Modal Styles
+  // Inquiry Modal Styles
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', padding: 20 },
   modalContent: { backgroundColor: '#111', borderRadius: 16, padding: 20, maxHeight: '80%', borderWidth: 1, borderColor: '#cadb2a' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20, borderBottomWidth: 1, borderBottomColor: '#333', paddingBottom: 10 },

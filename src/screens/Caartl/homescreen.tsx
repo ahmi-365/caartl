@@ -106,7 +106,13 @@ export const HomescreenLight = () => {
 
       if (result.success && Array.isArray(result.data.data)) {
         const negotiationVehicles = result.data.data.map((bid: any) => {
-          const vehicle = bid.vehicle;
+          // 🟢 CRITICAL FIX: Extract bid_amount and inject it into the vehicle object
+          // The API returns vehicle.current_bid as null for negotiations, 
+          // so we use the bid.bid_amount (your accepted offer) instead.
+          const vehicle = { ...bid.vehicle }; 
+          if (bid.bid_amount) {
+            vehicle.current_bid = bid.bid_amount;
+          }
           return vehicle;
         });
         setNegotiations(negotiationVehicles);
