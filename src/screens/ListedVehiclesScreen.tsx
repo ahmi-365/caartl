@@ -170,7 +170,6 @@ export default function ListedVehiclesScreen() {
     };
 
     const handleMenuPress = () => navigation.dispatch(DrawerActions.openDrawer());
-    const handleNotificationPress = () => alert('Notifications');
 
     const handleCarPress = (car: Models.Vehicle) => {
         navigation.navigate('CarDetailPage', { carId: car.id });
@@ -223,7 +222,7 @@ export default function ListedVehiclesScreen() {
     return (
         <>
             <View style={styles.container}>
-                <TopBar onMenuPress={handleMenuPress} onNotificationPress={handleNotificationPress} />
+                <TopBar onMenuPress={handleMenuPress} />
 
                 {loading ? (
                     <View style={{ paddingTop: 80, paddingHorizontal: 26 }}>

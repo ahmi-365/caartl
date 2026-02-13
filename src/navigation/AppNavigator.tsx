@@ -24,6 +24,7 @@ import InquiryTypeScreen from '../screens/InquiryTypeScreen';
 import InvoiceDetailScreen from '../screens/InvoiceDetailScreen';
 import ManagePreferenceScreen from '../screens/ManagePreferenceScreen';
 import MyBiddingsScreen from '../screens/MyBiddingsScreen';
+import NotificationsScreen from '../screens/NotificationsScreen';
 import PaymentReceiptsScreen from '../screens/PaymentReceiptsScreen';
 import PreferencesListScreen from '../screens/PreferencesListScreen';
 import SellCarInquiryScreen from '../screens/SellCarInquiryScreen';
@@ -32,6 +33,14 @@ import ViewBookingScreen from '../screens/ViewBookingScreen';
 
 // Navigator
 import { DrawerNavigator } from './DrawerNavigator';
+
+export type NotificationItem = {
+  id: string;
+  title: string;
+  message: string;
+  time: string;
+  isRead: boolean;
+};
 
 export type RootStackParamList = {
   Login: undefined;
@@ -57,6 +66,7 @@ export type RootStackParamList = {
   SellCarInquiry: undefined;
   AppointmentInquiry: undefined;
   ContactInquiry: undefined;
+  Notifications: { notifications: NotificationItem[] };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -139,6 +149,7 @@ const MainAppStack = () => {
           <Stack.Screen name="PreferencesList" component={PreferencesListScreen} />
           <Stack.Screen name="ManagePreference" component={ManagePreferenceScreen} />
           <Stack.Screen name="InvoiceDetail" component={InvoiceDetailScreen} />
+          <Stack.Screen name="Notifications" component={NotificationsScreen} />
 
           <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
         </Stack.Group>

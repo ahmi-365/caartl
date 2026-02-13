@@ -1,30 +1,30 @@
-import React, { useState, useEffect } from 'react';
-import {
-  ScrollView,
-  StyleSheet,
-  TextInput,
-  View,
-  TouchableOpacity,
-  ActivityIndicator,
-  RefreshControl,
-  FlatList,
-  Text,
-} from 'react-native';
-import Svg, { Path, Circle } from 'react-native-svg';
-import { useNavigation, DrawerActions } from '@react-navigation/native';
+import { DrawerActions, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import React, { useEffect, useState } from 'react';
+import {
+    ActivityIndicator,
+    FlatList,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+} from 'react-native';
+import Svg, { Circle, Path } from 'react-native-svg';
 
 // Imports
+import { Feather } from '@expo/vector-icons';
+import { BottomNav } from '../../components/BottomNavigation';
 import { CarCard } from '../../components/CarCard';
+import { FilterPopup } from '../../components/FilterPopup';
 import { ShimmerCarCard } from '../../components/ShimmerCarCard';
 import { TopBar } from '../../components/TopBar';
-import { BottomNav } from '../../components/BottomNavigation';
-import { FilterPopup } from '../../components/FilterPopup';
+import { useAlert } from '../../context/AlertContext';
+import * as Models from '../../data/modal';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 import apiService from '../../services/ApiService';
-import * as Models from '../../data/modal';
-import { useAlert } from '../../context/AlertContext';
-import { Feather } from '@expo/vector-icons';
 
 type HomeNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -195,7 +195,6 @@ export const HomescreenLight = () => {
   };
 
   const handleMenuPress = () => navigation.dispatch(DrawerActions.openDrawer());
-  const handleNotificationPress = () => alert('Notifications');
 
   const handleTabPress = (tabId: 'live' | 'upcoming' | 'negotiations') => {
     if (activeTab !== tabId) {
@@ -243,7 +242,7 @@ export const HomescreenLight = () => {
 
   return (
     <View style={styles.container}>
-      <TopBar onMenuPress={handleMenuPress} onNotificationPress={handleNotificationPress} />
+      <TopBar onMenuPress={handleMenuPress} />
 
 
       {/* Always show search, filters, and tabs. Only shimmer the card list area below. */}

@@ -1,28 +1,28 @@
-import React, { useState, useCallback } from 'react';
+import { Feather } from '@expo/vector-icons';
+import { DrawerActions, useFocusEffect, useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { LinearGradient } from 'expo-linear-gradient';
+import React, { useCallback, useState } from 'react';
 import {
-    View,
-    Text,
-    StyleSheet,
+    ActivityIndicator,
+    Dimensions,
     FlatList,
     Image,
-    TouchableOpacity,
-    ActivityIndicator,
     RefreshControl,
-    Dimensions
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Feather } from '@expo/vector-icons';
-import { useNavigation, useFocusEffect, DrawerActions } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import apiService from '../services/ApiService';
 import { useAlert } from '../context/AlertContext';
 import { RootStackParamList } from '../navigation/AppNavigator';
+import apiService from '../services/ApiService';
 
 // Navigation Components
-import { TopBar } from '../components/TopBar';
 import { BottomNav } from '../components/BottomNavigation';
+import { TopBar } from '../components/TopBar';
 
 const { width } = Dimensions.get('window');
 
@@ -123,7 +123,6 @@ export default function MyBookingsScreen() {
         navigation.dispatch(DrawerActions.openDrawer());
     };
 
-    const handleNotificationPress = () => { };
 
     const renderItem = ({ item }: { item: Booking }) => {
         const vehicle = item.vehicle;
@@ -183,7 +182,7 @@ export default function MyBookingsScreen() {
             <LinearGradient colors={['#000000', '#1a1a00']} style={styles.container}>
 
                 {/* Header */}
-                <TopBar onMenuPress={handleMenuPress} onNotificationPress={handleNotificationPress} />
+                <TopBar onMenuPress={handleMenuPress} />
 
                 {/* List Content */}
                 {loading ? (
