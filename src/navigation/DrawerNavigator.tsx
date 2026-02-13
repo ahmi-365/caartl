@@ -1,46 +1,52 @@
-import React from 'react';
-import { createDrawerNavigator, DrawerContentComponentProps } from '@react-navigation/drawer';
-import { StyleSheet, View, Text, TouchableOpacity, Image, SafeAreaView } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import { createDrawerNavigator, DrawerContentComponentProps } from '@react-navigation/drawer';
 import { useNavigation } from '@react-navigation/native';
-import { useAuth } from '../context/AuthContext';
+import { LinearGradient } from 'expo-linear-gradient';
+import React from 'react';
+import { Image, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import CustomAlert from '../components/ui/CustomAlert';
+import { useAuth } from '../context/AuthContext';
 
 // Import Screens
-import ListedVehiclesScreen from '../screens/ListedVehiclesScreen';
 import { HomescreenLight } from '../screens/Caartl/homescreen'; // Auctions
+import ListedVehiclesScreen from '../screens/ListedVehiclesScreen';
 import MyBookingsScreen from '../screens/MyBookingsScreen';
 
 const Drawer = createDrawerNavigator();
 
 // --- Custom Drawer Content ---
 const CustomDrawerContent = (props: DrawerContentComponentProps) => {
-    const { user, logout } = useAuth();
+    const { user, logout, isGuest, isUnapproved } = useAuth();
     const navigation = useNavigation();
     const [showLoginAlert, setShowLoginAlert] = React.useState(false);
+    const [showApprovalAlert, setShowApprovalAlert] = React.useState(false);
 
-    // Check if user is a guest
-    const isGuest = !user || user.id === 0;
-
+    // 🟢 Drawer items with access control:
+    // - public: true = accessible to everyone
+    // - public: false = requires login
+    // - allowUnapproved: true = unapproved users can access (e.g., Payment Receipts)
     const drawerItems = [
-        { label: 'Home', icon: 'home', screen: 'ListedVehicles', type: 'Feather', public: true },
-        // Auctions and Bookings are bottom nav items, typically not duplicated here unless desired.
-        // We keep them in the navigator below but maybe hide from this list if you only want them on bottom.
-        // Adding them here for completeness based on previous requests:
-        { label: 'My Bids', icon: 'gavel', screen: 'MyBiddings', type: 'MaterialCommunityIcons', public: false },
-        { label: 'Favorites', icon: 'heart', screen: 'FavoritesScreen', type: 'Feather', public: false },
-        { label: 'Payment Receipts', icon: 'file-text', screen: 'Payments', type: 'Feather', public: false },
+        { label: 'Home', icon: 'home', screen: 'ListedVehicles', type: 'Feather', public: true, allowUnapproved: true },
+        { label: 'My Bids', icon: 'gavel', screen: 'MyBiddings', type: 'MaterialCommunityIcons', public: false, allowUnapproved: false },
+        { label: 'Favorites', icon: 'heart', screen: 'FavoritesScreen', type: 'Feather', public: false, allowUnapproved: false },
+        { label: 'Payment Receipts', icon: 'file-text', screen: 'Payments', type: 'Feather', public: false, allowUnapproved: true }, // 🟢 Unapproved can access
     ];
 
-    const handleItemPress = (screen: string, isPublic: boolean) => {
+    const handleItemPress = (screen: string, isPublic: boolean, allowUnapproved: boolean = false) => {
+        // Guest trying to access private feature
         if (isGuest && !isPublic && screen !== 'InquiryType') {
             setShowLoginAlert(true);
-        } else {
-            // @ts-ignore
-            // Navigate to Stack screens
-            props.navigation.navigate(screen);
+            return;
         }
+        
+        // 🟢 Unapproved user trying to access restricted feature (not allowed for unapproved)
+        if (isUnapproved && !isPublic && !allowUnapproved) {
+            setShowApprovalAlert(true);
+            return;
+        }
+        
+        // @ts-ignore
+        props.navigation.navigate(screen);
     };
 
     const handleAuthAction = () => {
@@ -64,12 +70,24 @@ const CustomDrawerContent = (props: DrawerContentComponentProps) => {
                 </View>
 
                 <View style={styles.drawerItemsContainer}>
-                    {/* Map Menu Items */}
-                    {drawerItems.map((item, index) => (
+                    {/* Map Menu Items - filter based on approval status */}
+                    {drawerItems
+                        .filter(item => {
+                            // 🟢 Hide items that unapproved users can't access
+                            if (isUnapproved && !item.public && !item.allowUnapproved) {
+                                return false;
+                            }
+                            // 🟢 Hide private items for guests (except show them disabled)
+                            if (isGuest && !item.public) {
+                                return false;
+                            }
+                            return true;
+                        })
+                        .map((item, index) => (
                         <TouchableOpacity
                             key={index}
                             style={styles.drawerItem}
-                            onPress={() => handleItemPress(item.screen, item.public)}
+                            onPress={() => handleItemPress(item.screen, item.public, item.allowUnapproved)}
                         >
                             <View style={styles.iconBox}>
                                 {item.type === 'MaterialCommunityIcons' ? (
@@ -117,6 +135,14 @@ const CustomDrawerContent = (props: DrawerContentComponentProps) => {
                 title="Please Login"
                 message="You need to be logged in to access this feature."
                 onClose={() => setShowLoginAlert(false)}
+            />
+
+            {/* 🟢 ADD: Alert for unapproved users */}
+            <CustomAlert
+                visible={showApprovalAlert}
+                title="Account Pending Approval"
+                message="Your account is pending approval. Please complete your payment to activate your account and access all features."
+                onClose={() => setShowApprovalAlert(false)}
             />
         </LinearGradient>
     );

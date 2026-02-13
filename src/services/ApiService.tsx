@@ -1,6 +1,7 @@
 // src/services/ApiService.ts
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 import * as Models from '../data/modal';
 
 export interface AuctionFilters {
@@ -308,6 +309,7 @@ class ApiService {
         method: 'POST',
         headers: {
           'Accept': 'application/json',
+          ...(Platform.OS !== 'web' && { 'Content-Type': 'multipart/form-data' }),
           ...(token && { Authorization: `Bearer ${token}` }),
         },
         body: formData,

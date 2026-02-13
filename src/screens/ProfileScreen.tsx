@@ -1,30 +1,31 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  Image,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  Alert,
-  Modal
-} from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { LinearGradient } from 'expo-linear-gradient';
+import React, { useState } from 'react';
+import {
+    Alert,
+    Image,
+    Modal,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
+} from 'react-native';
 
 import { BottomNav } from '../components/BottomNavigation';
+import CustomAlert from '../components/ui/CustomAlert';
 import { useAuth } from '../context/AuthContext';
 import { RootStackParamList } from '../navigation/AppNavigator';
 
 type ProfileScreenProp = NativeStackNavigationProp<RootStackParamList>;
 
 export default function ProfileScreen() {
-  const { user, logout } = useAuth();
-  const isGuest = user && user.id === 0;
+  const { user, logout, isGuest, isUnapproved } = useAuth();
   const navigation = useNavigation<ProfileScreenProp>();
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [showApprovalAlert, setShowApprovalAlert] = useState(false);
 
   const handleDeleteAccount = () => {
     setDeleteModalVisible(false);
@@ -59,7 +60,7 @@ export default function ProfileScreen() {
                 {!isGuest && <Text style={styles.profileEmail}>{user?.email || 'email@example.com'}</Text>}
                 <Text style={styles.profileRole}>{user?.role || 'Member'}</Text>
               </View>
-              {!isGuest && (
+              {!isGuest && !isUnapproved && (
                 <TouchableOpacity
                   style={styles.editIcon}
                   onPress={() => navigation.navigate('EditProfile')}
@@ -76,6 +77,22 @@ export default function ProfileScreen() {
                 <Text style={styles.bioText}>{user.bio}</Text>
               </View>
             ) : null}
+
+            {/* 🟢 Pending Approval Banner */}
+            {isUnapproved && (
+              <View style={styles.approvalBanner}>
+                <Feather name="alert-circle" size={20} color="#ffaa00" />
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={styles.approvalBannerTitle}>Account Pending Approval</Text>
+                  <Text style={styles.approvalBannerText}>
+                    Please complete your payment to activate your account and access all features.
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={() => navigation.navigate('Payments')}>
+                  <Text style={styles.approvalBannerLink}>View Invoice</Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
             <View style={styles.separatorLine} />
           </View>
@@ -98,8 +115,43 @@ export default function ProfileScreen() {
                   <Text style={[styles.menuText, { color: '#cadb2a' }]}>Log In</Text>
                 </TouchableOpacity>
               </>
-            ) : (
+            ) : isUnapproved ? (
+              // 🟢 LIMITED MENU FOR UNAPPROVED USERS
               <>
+                {/* Payment Receipts - allowed for unapproved to view/pay invoices */}
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={() => navigation.navigate('Payments')}
+                >
+                  <View style={[styles.menuIconContainer, { backgroundColor: '#ffaa00' }]}>
+                    <Feather name="file-text" size={24} color="#000" />
+                  </View>
+                  <Text style={styles.menuText}>Payment Receipts</Text>
+                  <Feather name="arrow-right" size={24} color="#fff" />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={() => navigation.navigate('ChangePassword')}
+                >
+                  <View style={styles.menuIconContainer}>
+                    <Feather name="lock" size={24} color="#000" />
+                  </View>
+                  <Text style={styles.menuText}>Change Password</Text>
+                  <Feather name="arrow-right" size={24} color="#fff" />
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.menuItem} onPress={logout}>
+                  <View style={styles.menuIconContainer}>
+                    <MaterialCommunityIcons name="logout" size={24} color="#000" />
+                  </View>
+                  <Text style={styles.menuText}>Log Out</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              // 🟢 FULL MENU FOR APPROVED USERS
+              <>
+                {/* My Preferences */}
                 <TouchableOpacity
                   style={styles.menuItem}
                   onPress={() => navigation.navigate('PreferencesList')}
@@ -181,6 +233,14 @@ export default function ProfileScreen() {
         </Modal>
 
         <BottomNav />
+
+        {/* 🟢 Approval Alert */}
+        <CustomAlert
+          visible={showApprovalAlert}
+          title="Account Pending Approval"
+          message="Your account is pending approval. Please complete your payment to activate your account and access all features."
+          onClose={() => setShowApprovalAlert(false)}
+        />
       </LinearGradient>
     </View>
   );
@@ -204,6 +264,12 @@ const styles = StyleSheet.create({
   bioContainer: { paddingHorizontal: 20, marginTop: 15 },
   bioLabel: { color: '#cadb2a', fontSize: 12, fontFamily: 'Poppins', fontWeight: '600', marginBottom: 4 },
   bioText: { color: '#ccc', fontSize: 13, fontFamily: 'Poppins', lineHeight: 20 },
+
+  // 🟢 Approval Banner Styles
+  approvalBanner: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255, 170, 0, 0.15)', borderWidth: 1, borderColor: '#ffaa00', borderRadius: 12, padding: 12, marginHorizontal: 20, marginTop: 15 },
+  approvalBannerTitle: { color: '#ffaa00', fontSize: 13, fontFamily: 'Poppins', fontWeight: '600' },
+  approvalBannerText: { color: '#ccc', fontSize: 11, fontFamily: 'Poppins', marginTop: 2 },
+  approvalBannerLink: { color: '#cadb2a', fontSize: 12, fontFamily: 'Poppins', fontWeight: '600', textDecorationLine: 'underline' },
 
   separatorLine: { height: 1, backgroundColor: '#CADB2A', marginHorizontal: 20, marginVertical: 20, opacity: 0.3 },
 

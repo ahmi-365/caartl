@@ -1,45 +1,45 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Dimensions,
-  Image,
-  TouchableOpacity,
-  ActivityIndicator,
-  Modal,
-  LayoutChangeEvent,
-  NativeSyntheticEvent,
-  NativeScrollEvent,
-  Linking, // 🟢 Used for WhatsApp
-  TextInput,
+    ActivityIndicator,
+    Dimensions,
+    Image,
+    LayoutChangeEvent,
+    Linking,
+    Modal,
+    NativeScrollEvent,
+    NativeSyntheticEvent,
+    ScrollView,
+    StyleSheet,
+    Text, // 🟢 Used for WhatsApp
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 // 🟢 Import FlatList from gesture-handler for better gesture support
-import { FlatList } from 'react-native-gesture-handler';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Feather, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { Feather, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
+import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  runOnJS,
-} from "react-native-reanimated";
+import { ResizeMode, Video } from 'expo-av';
+import { LinearGradient } from 'expo-linear-gradient';
 import {
-  Gesture,
-  GestureDetector,
-  GestureHandlerRootView,
-  Pressable,
-} from "react-native-gesture-handler";
-import { Video, ResizeMode } from 'expo-av';
+    FlatList, Gesture,
+    GestureDetector,
+    GestureHandlerRootView,
+    Pressable
+} from 'react-native-gesture-handler';
+import Animated, {
+    runOnJS,
+    useAnimatedStyle,
+    useSharedValue,
+    withTiming,
+} from "react-native-reanimated";
 
-import { RootStackParamList } from '../navigation/AppNavigator';
-import apiService from '../services/ApiService';
-import * as Models from '../data/modal';
 import { useAlert } from '../context/AlertContext';
 import { useAuth } from '../context/AuthContext';
+import * as Models from '../data/modal';
+import { RootStackParamList } from '../navigation/AppNavigator';
+import apiService from '../services/ApiService';
+import CustomAlert from './ui/CustomAlert';
 
 type CarDetailRouteProp = RouteProp<RootStackParamList, 'CarDetailPage'>;
 type CarDetailNavigationProp = NativeStackNavigationProp<RootStackParamList, 'CarDetailPage'>;
@@ -303,9 +303,11 @@ export const CarDetailPage = () => {
   const route = useRoute<CarDetailRouteProp>();
   const { carId } = route.params;
 
-  const { user } = useAuth();
+  const { user, isGuest, isUnapproved } = useAuth();
   const { showAlert } = useAlert();
   const [loading, setLoading] = useState(true);
+  const [showLoginAlert, setShowLoginAlert] = useState(false);
+  const [showApprovalAlert, setShowApprovalAlert] = useState(false);
 
   const [fullData, setFullData] = useState<Models.AuctionDetailsResponse['data'] | null>(null);
   const [bookingStatus, setBookingStatus] = useState<'none' | 'pending_payment' | 'intransfer' | 'delivered'>('none');
@@ -423,6 +425,16 @@ export const CarDetailPage = () => {
   };
 
   const handleBookNow = () => {
+    // 🟢 Guest check
+    if (isGuest) {
+      setShowLoginAlert(true);
+      return;
+    }
+    // 🟢 Unapproved user check
+    if (isUnapproved) {
+      setShowApprovalAlert(true);
+      return;
+    }
     if (fullData?.vehicle) {
       navigation.navigate('BookCar', { vehicle: fullData.vehicle });
     } else {
@@ -1034,6 +1046,22 @@ ${inqComment}`;
             </View>
           </View>
         </Modal>
+
+        {/* 🟢 ADD: Login Alert for guests */}
+        <CustomAlert
+          visible={showLoginAlert}
+          title="Please Login"
+          message="Create an account or login to Caartl to book this vehicle."
+          onClose={() => setShowLoginAlert(false)}
+        />
+
+        {/* 🟢 ADD: Approval Alert for unapproved users */}
+        <CustomAlert
+          visible={showApprovalAlert}
+          title="Account Pending Approval"
+          message="Your account is pending approval. Please complete your payment to activate your account and book vehicles."
+          onClose={() => setShowApprovalAlert(false)}
+        />
 
       </LinearGradient>
     </View>

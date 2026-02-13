@@ -1,26 +1,24 @@
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import * as ImagePicker from 'expo-image-picker';
+import { LinearGradient } from 'expo-linear-gradient';
 import React, { useState } from 'react';
 import {
-    View,
-    Text,
-    StyleSheet,
-    TouchableOpacity,
-    ScrollView,
+    ActivityIndicator,
     Image,
     Linking,
-    ActivityIndicator,
-    Alert,
-    Platform
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as ImagePicker from 'expo-image-picker';
 
-import apiService from '../services/ApiService';
-import * as Models from '../data/modal';
-import { RootStackParamList } from '../navigation/AppNavigator';
 import { useAlert } from '../context/AlertContext';
+import { RootStackParamList } from '../navigation/AppNavigator';
+import apiService from '../services/ApiService';
 
 type DetailRouteProp = RouteProp<RootStackParamList, 'InvoiceDetail'>;
 
@@ -66,8 +64,14 @@ export default function InvoiceDetailScreen() {
         const match = /\.(\w+)$/.exec(filename);
         const type = match ? `image/${match[1]}` : `image/jpeg`;
 
-        // @ts-ignore
-        formData.append('payment_slip', { uri: Platform.OS === 'android' ? uri : uri.replace('file://', ''), name: filename, type });
+        if (Platform.OS === 'web') {
+            const response = await fetch(uri);
+            const blob = await response.blob();
+            formData.append('payment_slip', blob, filename);
+        } else {
+            // @ts-ignore
+            formData.append('payment_slip', { uri: Platform.OS === 'android' ? uri : uri.replace('file://', ''), name: filename, type });
+        }
 
         try {
             const result = await apiService.uploadPaymentSlip(formData);

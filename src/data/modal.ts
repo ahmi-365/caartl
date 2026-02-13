@@ -37,6 +37,7 @@ export interface User {
     id: number;
     agent_id: number | null;
     is_approved: number;
+    status?: string; // pending/active from register response
     name: string;
     email: string;
     email_verified_at: string | null;

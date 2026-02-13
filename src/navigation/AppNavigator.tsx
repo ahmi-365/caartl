@@ -1,33 +1,33 @@
-import React from 'react';
-import { View, Platform, StatusBar } from 'react-native';
-import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
+import { DefaultTheme, NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { useAuth } from '../context/AuthContext';
+import React from 'react';
+import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAuth } from '../context/AuthContext';
 
 // Screens
-import { SplashScreenDark } from '../screens/SplashScreenDark';
-import LoginScreen from '../screens/LoginScreen';
-import RegisterScreen from '../screens/RegisterScreen';
 import { CarDetailPage } from '../components/CarDetailPage';
-import LiveCarAuctionScreen from '../screens/LiveCarAuctionScreen';
-import ChangePasswordScreen from '../screens/ChangePasswordScreen';
-import FavoritesScreen from '../screens/FavoritesScreen';
-import ProfileScreen from '../screens/ProfileScreen';
-import EditProfileScreen from '../screens/EditProfileScreen';
 import BiddingDetailScreen from '../screens/BiddingDetailScreen';
 import BookCarScreen from '../screens/BookCarScreen';
+import ChangePasswordScreen from '../screens/ChangePasswordScreen';
+import EditProfileScreen from '../screens/EditProfileScreen';
+import FavoritesScreen from '../screens/FavoritesScreen';
+import LiveCarAuctionScreen from '../screens/LiveCarAuctionScreen';
+import LoginScreen from '../screens/LoginScreen';
+import ProfileScreen from '../screens/ProfileScreen';
+import RegisterScreen from '../screens/RegisterScreen';
+import { SplashScreenDark } from '../screens/SplashScreenDark';
 // MyBookings is in Drawer now
-import ViewBookingScreen from '../screens/ViewBookingScreen';
-import MyBiddingsScreen from '../screens/MyBiddingsScreen';
-import PreferencesListScreen from '../screens/PreferencesListScreen';
-import ManagePreferenceScreen from '../screens/ManagePreferenceScreen';
-import PaymentReceiptsScreen from '../screens/PaymentReceiptsScreen';
-import InvoiceDetailScreen from '../screens/InvoiceDetailScreen';
-import SellCarInquiryScreen from '../screens/SellCarInquiryScreen';
 import AppointmentInquiryScreen from '../screens/AppointmentInquiryScreen';
 import ContactInquiryScreen from '../screens/ContactInquiryScreen';
 import InquiryTypeScreen from '../screens/InquiryTypeScreen';
+import InvoiceDetailScreen from '../screens/InvoiceDetailScreen';
+import ManagePreferenceScreen from '../screens/ManagePreferenceScreen';
+import MyBiddingsScreen from '../screens/MyBiddingsScreen';
+import PaymentReceiptsScreen from '../screens/PaymentReceiptsScreen';
+import PreferencesListScreen from '../screens/PreferencesListScreen';
+import SellCarInquiryScreen from '../screens/SellCarInquiryScreen';
+import ViewBookingScreen from '../screens/ViewBookingScreen';
 // Auctions (HomescreenLight) is in Drawer now
 
 // Navigator
@@ -148,13 +148,12 @@ const MainAppStack = () => {
 };
 
 const AppNavigator = () => {
-  const { isLoading, userToken, user } = useAuth();
+  const { isLoading, userToken, isGuest } = useAuth();
 
   if (isLoading) {
     return <SplashScreenDark />;
   }
 
-  const isGuest = user && user.id === 0;
   return (
     <NavigationContainer theme={MyDarkTheme}>
       {userToken || isGuest ? <MainAppStack /> : <AuthStack />}

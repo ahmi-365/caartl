@@ -1,30 +1,30 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { Feather } from '@expo/vector-icons';
+import { DrawerActions, useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
+    ActivityIndicator,
+    FlatList,
+    RefreshControl,
     ScrollView,
     StyleSheet,
-    TextInput,
-    View,
-    TouchableOpacity,
-    ActivityIndicator,
-    RefreshControl,
-    FlatList,
     Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
-import Svg, { Path, Circle } from 'react-native-svg';
-import { useNavigation, DrawerActions, useFocusEffect } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Feather } from '@expo/vector-icons';
+import Svg, { Circle, Path } from 'react-native-svg';
 
 // Imports
+import { BottomNav } from '../components/BottomNavigation';
 import { CarCard } from '../components/CarCard';
+import { FilterPopup } from '../components/FilterPopup';
 import { ShimmerCarCard } from '../components/ShimmerCarCard';
 import { TopBar } from '../components/TopBar';
-import { BottomNav } from '../components/BottomNavigation';
-import { FilterPopup } from '../components/FilterPopup';
+import { useAlert } from '../context/AlertContext';
+import * as Models from '../data/modal';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import apiService from '../services/ApiService';
-import * as Models from '../data/modal';
-import { useAlert } from '../context/AlertContext';
 
 type ListedScreenProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -42,8 +42,9 @@ interface FilterState {
 export default function ListedVehiclesScreen() {
     const navigation = useNavigation<ListedScreenProp>();
     const { showAlert } = useAlert();
-    const { user } = require('../context/AuthContext').useAuth();
+    const { user, isGuest, isUnapproved } = require('../context/AuthContext').useAuth();
     const [showLoginAlert, setShowLoginAlert] = useState(false);
+    const [showApprovalAlert, setShowApprovalAlert] = useState(false);
 
     const [searchText, setSearchText] = useState('');
     const [filterVisible, setFilterVisible] = useState(false);
@@ -177,8 +178,14 @@ export default function ListedVehiclesScreen() {
 
     // 🟢 Toggle Logic
     const handleToggleFavorite = async (carId: number) => {
-        if (user && user.id === 0) {
+        // 🟢 Guest check
+        if (isGuest) {
             setShowLoginAlert(true);
+            return;
+        }
+        // 🟢 Unapproved user check
+        if (isUnapproved) {
+            setShowApprovalAlert(true);
             return;
         }
         // Optimistic Update
@@ -328,6 +335,14 @@ export default function ListedVehiclesScreen() {
                 title="Please Login"
                 message="Create an account or login to Caartl to use all features."
                 onClose={() => setShowLoginAlert(false)}
+            />
+
+            {/* 🟢 ADD: Alert for unapproved users */}
+            <CustomAlert
+                visible={showApprovalAlert}
+                title="Account Pending Approval"
+                message="Your account is pending approval. Please complete your payment to activate your account and access all features."
+                onClose={() => setShowApprovalAlert(false)}
             />
         </>
     );

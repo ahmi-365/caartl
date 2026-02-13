@@ -1,12 +1,15 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import apiService from '../services/ApiService';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import * as Models from '../data/modal';
+import apiService from '../services/ApiService';
 
 interface AuthContextType {
     userToken: string | null;
     user: Models.User | null;
     isLoading: boolean;
+    isGuest: boolean;        // 🟢 true if user is guest (id === 0)
+    isApproved: boolean;     // 🟢 true if user is approved (is_approved === 1)
+    isUnapproved: boolean;   // 🟢 true if logged in but not approved
     login: (credentials: any) => Promise<boolean>;
     register: (userData: any) => Promise<boolean>;
     logout: () => void;
@@ -20,6 +23,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const [isLoading, setIsLoading] = useState(true);
     const [userToken, setUserToken] = useState<string | null>(null);
     const [user, setUser] = useState<Models.User | null>(null);
+
+    const normalizeUser = (inputUser: Models.User | null): Models.User | null => {
+        if (!inputUser) return null;
+        const hasApproval = typeof inputUser.is_approved === 'number';
+        const resolvedApproval = hasApproval
+            ? inputUser.is_approved
+            : (inputUser.status === 'pending' ? 0 : 1);
+        return {
+            ...inputUser,
+            is_approved: resolvedApproval,
+        };
+    };
 
     useEffect(() => {
         const bootstrapAsync = async () => {
@@ -39,7 +54,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
                     // If successful (success: true means 200 OK and valid JSON)
                     if (result.success && result.data.data) {
-                        userData = result.data.data;
+                        userData = normalizeUser(result.data.data);
                         await AsyncStorage.setItem('userData', JSON.stringify(userData));
                     } else {
                         // If result.success is false (e.g. 401 or HTML error), log out.
@@ -67,9 +82,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const result = await apiService.login(credentials);
         if (result.success && result.data.access_token) {
             const { access_token, user } = result.data;
+            const normalizedUser = normalizeUser(user);
             setUserToken(access_token);
-            setUser(user);
-            await apiService.storeUserData(user, access_token);
+            setUser(normalizedUser);
+            await apiService.storeUserData(normalizedUser, access_token);
             return true;
         }
         return false;
@@ -79,9 +95,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const result = await apiService.register(userData);
         if (result.success && result.data.token) {
             const { token, user } = result.data;
+            const normalizedUser = normalizeUser(user);
             setUserToken(token);
-            setUser(user);
-            await apiService.storeUserData(user, token);
+            setUser(normalizedUser);
+            await apiService.storeUserData(normalizedUser, token);
             return true;
         }
         return false;
@@ -125,10 +142,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         await AsyncStorage.removeItem('userToken');
     };
 
+    // 🟢 Computed properties for approval status
+    const isGuest = !!user && user.id === 0;
+    const isApproved = !!user && !isGuest && user.is_approved === 1;
+    const isUnapproved = !!user && !isGuest && user.is_approved === 0; // Logged in but not approved
+
     const value = {
         userToken,
         user,
         isLoading,
+        isGuest,
+        isApproved,
+        isUnapproved,
         login,
         register,
         logout,

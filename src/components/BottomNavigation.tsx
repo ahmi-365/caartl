@@ -1,12 +1,12 @@
-import React, { useEffect } from 'react';
-import { TouchableOpacity, View, StyleSheet, Text } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Path } from 'react-native-svg';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useNavigation, useIsFocused, useRoute } from '@react-navigation/native';
+import { useIsFocused, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../navigation/AppNavigator';
+import { LinearGradient } from 'expo-linear-gradient';
+import React, { useEffect } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import { useAuth } from '../context/AuthContext';
+import { RootStackParamList } from '../navigation/AppNavigator';
 import CustomAlert from './ui/CustomAlert';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -18,8 +18,9 @@ export const BottomNav = () => {
   const route = useRoute();
 
   const [active, setActive] = React.useState<'home' | 'auction' | 'booking' | 'profile'>('home');
-  const { user } = useAuth();
+  const { user, isGuest, isUnapproved } = useAuth();
   const [showLoginAlert, setShowLoginAlert] = React.useState(false);
+  const [showApprovalAlert, setShowApprovalAlert] = React.useState(false);
 
   useEffect(() => {
     if (!isFocused) return;
@@ -50,8 +51,14 @@ export const BottomNav = () => {
 
   const goBooking = () => {
     setActive('booking');
-    if (user && user.id === 0) {
+    // 🟢 Guest check
+    if (isGuest) {
       setShowLoginAlert(true);
+      return;
+    }
+    // 🟢 Unapproved user check
+    if (isUnapproved) {
+      setShowApprovalAlert(true);
       return;
     }
     // 🟢 Navigate to MyBookings inside DrawerRoot
@@ -103,6 +110,14 @@ export const BottomNav = () => {
         title="Please Login"
         message="Create an account or login to Caartl to use all features."
         onClose={() => setShowLoginAlert(false)}
+      />
+
+      {/* 🟢 ADD: Alert for unapproved users */}
+      <CustomAlert
+        visible={showApprovalAlert}
+        title="Account Pending Approval"
+        message="Your account is pending approval. Please complete your payment to activate your account and access all features."
+        onClose={() => setShowApprovalAlert(false)}
       />
     </>
   );

@@ -1,42 +1,42 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Dimensions,
-  Image,
-  TouchableOpacity,
-  ActivityIndicator,
-  Modal,
-  LayoutChangeEvent,
-  NativeSyntheticEvent,
-  NativeScrollEvent,
-  // FlatList, // 🔴 Removed from here
-} from 'react-native';
-import { FlatList } from 'react-native-gesture-handler'; // 🟢 Added from gesture-handler
-import { LinearGradient } from 'expo-linear-gradient';
-import { Feather, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { Feather, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
+import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  runOnJS,
-} from "react-native-reanimated";
+import { ResizeMode, Video } from 'expo-av';
+import { LinearGradient } from 'expo-linear-gradient';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Gesture,
-  GestureDetector,
-  GestureHandlerRootView,
-  Pressable,
-} from "react-native-gesture-handler";
-import { Video, ResizeMode } from 'expo-av';
+    ActivityIndicator,
+    Dimensions,
+    Image,
+    LayoutChangeEvent,
+    Modal,
+    NativeScrollEvent,
+    NativeSyntheticEvent,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from 'react-native';
+import {
+    FlatList, Gesture,
+    GestureDetector,
+    GestureHandlerRootView,
+    Pressable
+} from 'react-native-gesture-handler'; // 🟢 Added from gesture-handler
+import Animated, {
+    runOnJS,
+    useAnimatedStyle,
+    useSharedValue,
+    withTiming,
+} from "react-native-reanimated";
 
+import { useAlert } from '../context/AlertContext';
+import { useAuth } from '../context/AuthContext';
+import * as Models from '../data/modal';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import apiService from '../services/ApiService';
-import * as Models from '../data/modal';
-import { useAlert } from '../context/AlertContext';
+import CustomAlert from '../components/ui/CustomAlert';
 
 type LiveAuctionRouteProp = RouteProp<RootStackParamList, 'LiveAuction'>;
 type LiveAuctionScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'LiveAuction'>;
@@ -316,6 +316,10 @@ export default function LiveCarAuctionScreen() {
   const viewType = route.params?.viewType || 'live';
 
   const { showAlert } = useAlert();
+  const { isGuest, isUnapproved } = useAuth();
+  const [showLoginAlert, setShowLoginAlert] = useState(false);
+  const [showApprovalAlert, setShowApprovalAlert] = useState(false);
+  
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -509,6 +513,16 @@ export default function LiveCarAuctionScreen() {
   };
 
   const handlePlaceBid = async () => {
+    // 🟢 Guest check
+    if (isGuest) {
+      setShowLoginAlert(true);
+      return;
+    }
+    // 🟢 Unapproved user check
+    if (isUnapproved) {
+      setShowApprovalAlert(true);
+      return;
+    }
     if (!biddingData?.vehicle) return;
     setSubmitting(true);
     try {
@@ -1188,6 +1202,22 @@ export default function LiveCarAuctionScreen() {
           visible={videoModalVisible}
           videoUrl={currentVideoUrl}
           onClose={() => setVideoModalVisible(false)}
+        />
+
+        {/* 🟢 ADD: Login Alert for guests */}
+        <CustomAlert
+          visible={showLoginAlert}
+          title="Please Login"
+          message="Create an account or login to Caartl to place bids."
+          onClose={() => setShowLoginAlert(false)}
+        />
+
+        {/* 🟢 ADD: Approval Alert for unapproved users */}
+        <CustomAlert
+          visible={showApprovalAlert}
+          title="Account Pending Approval"
+          message="Your account is pending approval. Please complete your payment to activate your account and place bids."
+          onClose={() => setShowApprovalAlert(false)}
         />
 
       </LinearGradient>
