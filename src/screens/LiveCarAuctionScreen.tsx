@@ -5,38 +5,38 @@ import { ResizeMode, Video } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Dimensions,
-    Image,
-    LayoutChangeEvent,
-    Modal,
-    NativeScrollEvent,
-    NativeSyntheticEvent,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Dimensions,
+  Image,
+  LayoutChangeEvent,
+  Modal,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import {
-    FlatList, Gesture,
-    GestureDetector,
-    GestureHandlerRootView,
-    Pressable
+  FlatList, Gesture,
+  GestureDetector,
+  GestureHandlerRootView,
+  Pressable
 } from 'react-native-gesture-handler'; // 🟢 Added from gesture-handler
 import Animated, {
-    runOnJS,
-    useAnimatedStyle,
-    useSharedValue,
-    withTiming,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
 } from "react-native-reanimated";
 
+import CustomAlert from '../components/ui/CustomAlert';
 import { useAlert } from '../context/AlertContext';
 import { useAuth } from '../context/AuthContext';
 import * as Models from '../data/modal';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import apiService from '../services/ApiService';
-import CustomAlert from '../components/ui/CustomAlert';
 
 type LiveAuctionRouteProp = RouteProp<RootStackParamList, 'LiveAuction'>;
 type LiveAuctionScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'LiveAuction'>;
@@ -340,6 +340,10 @@ export default function LiveCarAuctionScreen() {
   const [myBid, setMyBid] = useState<number>(0);
   const [isBidSheetVisible, setIsBidSheetVisible] = useState(false);
   
+  // 🟢 Auto Bid States
+  const [isAutoBidSheetVisible, setIsAutoBidSheetVisible] = useState(false);
+  const [maxBid, setMaxBid] = useState<number>(0);
+  
   const [previewImages, setPreviewImages] = useState<string[]>([]);
   const [previewIndex, setPreviewIndex] = useState(0);
   const [isPreviewMap, setIsPreviewMap] = useState(false);
@@ -359,6 +363,29 @@ export default function LiveCarAuctionScreen() {
   const scrollViewRef = useRef<ScrollView>(null);
   const sectionYCoords = useRef<{ [key: string]: number }>({});
   const isManualScroll = useRef(false);
+  
+  // 🟢 Scroll-based sticky timer state
+  const [showStickyTimer, setShowStickyTimer] = useState(false);
+  
+  // 🟢 Animation for sticky timer bar
+  const timerBarHeight = useSharedValue(0);
+  const timerBarOpacity = useSharedValue(0);
+  
+  const timerBarAnimatedStyle = useAnimatedStyle(() => ({
+    height: timerBarHeight.value,
+    opacity: timerBarOpacity.value,
+  }));
+  
+  // 🟢 Animate timer bar when showStickyTimer changes
+  useEffect(() => {
+    if (showStickyTimer && viewType === 'live' && bookingStatus === 'none' && !isBidSheetVisible && !isAutoBidSheetVisible) {
+      timerBarHeight.value = withTiming(145, { duration: 300 });
+      timerBarOpacity.value = withTiming(1, { duration: 300 });
+    } else {
+      timerBarHeight.value = withTiming(0, { duration: 200 });
+      timerBarOpacity.value = withTiming(0, { duration: 200 });
+    }
+  }, [showStickyTimer, viewType, bookingStatus, isBidSheetVisible, isAutoBidSheetVisible]);
 
   // 🟢 Moved Inside Component so it can access damageTypes state
   const getDamageBadgeColor = (damageType: string) => {
@@ -414,20 +441,22 @@ export default function LiveCarAuctionScreen() {
         const data = result.data.data;
         setBiddingData(data);
         biddingDataRef.current = data;
-        if (!isBidSheetVisible) {
+        if (!isBidSheetVisible && !isAutoBidSheetVisible) {
           if (data.minimum_next_bid) {
             setMyBid(data.minimum_next_bid);
+            setMaxBid(data.minimum_next_bid);
           } else {
             const current = data.highest_bid || 0;
             const increment = Number(data.vehicle.bid_control || 100);
             setMyBid(current + increment);
+            setMaxBid(current + increment);
           }
         }
       }
     } catch (error) {
       console.error("Live fetch error:", error);
     }
-  }, [carId, isBidSheetVisible]);
+  }, [carId, isBidSheetVisible, isAutoBidSheetVisible]);
 
   useEffect(() => {
     if (viewType === 'live') {
@@ -493,6 +522,10 @@ export default function LiveCarAuctionScreen() {
   const onScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (isManualScroll.current) return;
     const scrollY = event.nativeEvent.contentOffset.y;
+    
+    // 🟢 Show sticky timer when scrolled past banner (150px threshold - lowered for better UX)
+    setShowStickyTimer(scrollY > 150);
+    
     const triggerPoint = scrollY + TAB_BAR_HEIGHT + 150;
     let currentTab = dynamicTabs[0];
     for (const tab of dynamicTabs) {
@@ -510,6 +543,13 @@ export default function LiveCarAuctionScreen() {
   const handleDecrement = () => {
     const minNext = biddingData?.minimum_next_bid || 0;
     if (myBid - Number(biddingData?.vehicle.bid_control || 100) >= minNext) setMyBid(prev => prev - Number(biddingData?.vehicle.bid_control || 100));
+  };
+  
+  // 🟢 Auto Bid Increment/Decrement
+  const handleAutoBidIncrement = () => setMaxBid(prev => prev + Number(biddingData?.vehicle.bid_control || 100));
+  const handleAutoBidDecrement = () => {
+    const minNext = biddingData?.minimum_next_bid || 0;
+    if (maxBid - Number(biddingData?.vehicle.bid_control || 100) >= minNext) setMaxBid(prev => prev - Number(biddingData?.vehicle.bid_control || 100));
   };
 
   const handlePlaceBid = async () => {
@@ -533,6 +573,40 @@ export default function LiveCarAuctionScreen() {
         setIsBidSheetVisible(false);
       } else {
         showAlert('Error', result.data.message || 'Failed to place bid.');
+      }
+    } catch (error) {
+      showAlert('Error', 'Network error while bidding.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+  
+  // 🟢 Handle Auto Bid
+  const handleAutoBid = async () => {
+    // Guest check
+    if (isGuest) {
+      setShowLoginAlert(true);
+      return;
+    }
+    // Unapproved user check
+    if (isUnapproved) {
+      setShowApprovalAlert(true);
+      return;
+    }
+    if (!biddingData?.vehicle) return;
+    setSubmitting(true);
+    try {
+      const result = await apiService.placeBid(biddingData.vehicle.id, { 
+        current_bid: biddingData.minimum_next_bid || biddingData.highest_bid || 0, 
+        max_bid: maxBid,
+        is_auto: true 
+      });
+      if (result.success) {
+        showAlert('Success', 'Auto bid placed successfully!');
+        fetchLiveBidData();
+        setIsAutoBidSheetVisible(false);
+      } else {
+        showAlert('Error', result.data.message || 'Failed to place auto bid.');
       }
     } catch (error) {
       showAlert('Error', 'Network error while bidding.');
@@ -1118,8 +1192,48 @@ export default function LiveCarAuctionScreen() {
             <Text style={[styles.descriptionText, { marginTop: 10 }]}>{vehicle.remarks || "No remarks."}</Text>
           </View>
 
-          <View style={{ height: height * 0.6 }} />
+          <View style={{ height: 100 }} />
         </ScrollView>
+
+        {/* 🟢 Sticky Bid Section (shows on scroll for live auctions - above the footer) */}
+        <Animated.View style={[styles.stickyTimerBarWrapper, timerBarAnimatedStyle]}>
+          <View style={styles.stickyBidSection}>
+            {/* Seller Expectation & Current Bid Row */}
+            <View style={styles.stickyPriceRow}>
+              <View style={styles.stickyPriceBox}>
+                <Text style={styles.stickyPriceLabel}>Seller Expectation</Text>
+                <Text style={styles.stickyPriceValue}>AED {sellerExpectation.toLocaleString()}</Text>
+              </View>
+              <View style={[styles.stickyPriceBox, styles.stickyPriceBoxHighlight]}>
+                <Text style={styles.stickyPriceLabel}>Current Bid</Text>
+                <Text style={[styles.stickyPriceValue, { color: '#cadb2a' }]}>AED {currentPrice.toLocaleString()}</Text>
+              </View>
+            </View>
+            
+            {/* Timer Row */}
+            <View style={styles.stickyTimerRow}>
+              <View style={styles.timerBox}>
+                <Text style={styles.timerNumber}>{String(countdown.days).padStart(2, '0')}</Text>
+                <Text style={styles.timerLabel}>Days</Text>
+              </View>
+              <Text style={styles.timerColon}>:</Text>
+              <View style={styles.timerBox}>
+                <Text style={styles.timerNumber}>{String(countdown.hours).padStart(2, '0')}</Text>
+                <Text style={styles.timerLabel}>Hours</Text>
+              </View>
+              <Text style={styles.timerColon}>:</Text>
+              <View style={styles.timerBox}>
+                <Text style={styles.timerNumber}>{String(countdown.minutes).padStart(2, '0')}</Text>
+                <Text style={styles.timerLabel}>Mins</Text>
+              </View>
+              <Text style={styles.timerColon}>:</Text>
+              <View style={styles.timerBox}>
+                <Text style={styles.timerNumber}>{String(countdown.seconds).padStart(2, '0')}</Text>
+                <Text style={styles.timerLabel}>Secs</Text>
+              </View>
+            </View>
+          </View>
+        </Animated.View>
 
         {/* Footer */}
         {bookingStatus !== 'none' ? (
@@ -1135,17 +1249,19 @@ export default function LiveCarAuctionScreen() {
             <Text style={styles.footerDateText}>{formatEndedDate(vehicle.auction_end_date)}</Text>
           </View>
         ) : viewType === 'live' ? (
-          !isBidSheetVisible ? (
+          !isBidSheetVisible && !isAutoBidSheetVisible ? (
             <View style={styles.bidNowContainer}>
-              <View>
-                <Text style={styles.totalPriceLabel}>Current Bid</Text>
-                <Text style={styles.totalPriceValue}>{currentBidDisplay} AED</Text>
+              <View style={styles.bidFooterButtonRow}>
+                <TouchableOpacity style={styles.autoBidBtn} onPress={() => setIsAutoBidSheetVisible(true)}>
+                  <Text style={styles.autoBidText}>Auto Bid</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.placeBidBtn} onPress={() => setIsBidSheetVisible(true)}>
+                  <MaterialCommunityIcons name="gavel" size={18} color="#000" style={{ marginRight: 6 }} />
+                  <Text style={styles.placeBidText}>Place Bid</Text>
+                </TouchableOpacity>
               </View>
-              <TouchableOpacity style={styles.bidNowButton} onPress={() => setIsBidSheetVisible(true)}>
-                <Text style={styles.bidNowButtonText}>Bid Now</Text>
-              </TouchableOpacity>
             </View>
-          ) : (
+          ) : isBidSheetVisible ? (
             <View style={styles.bottomSheet}>
               <TouchableOpacity style={styles.bottomArrowContainer} onPress={() => setIsBidSheetVisible(false)} >
                 <Feather name="arrow-down" size={24} color="#cadb2a" />
@@ -1156,12 +1272,28 @@ export default function LiveCarAuctionScreen() {
                 <View><Text style={styles.bidAmountText}>{myBid.toLocaleString()}</Text><Text style={styles.currencyText}>AED</Text></View>
                 <TouchableOpacity style={styles.circleBtnGreen} onPress={handleIncrement}><Feather name="plus" size={24} color="#fff" /></TouchableOpacity>
               </View>
-              <TouchableOpacity style={styles.placeBidBtn} onPress={handlePlaceBid} disabled={submitting}>
-                {submitting ? <ActivityIndicator color="#000" /> : <><Text style={styles.placeBidBtnText}>Place Bid</Text><MaterialCommunityIcons name="gavel" size={20} color="#000" style={{ marginLeft: 8 }} /></>}
+              <TouchableOpacity style={styles.sheetPlaceBidBtn} onPress={handlePlaceBid} disabled={submitting}>
+                {submitting ? <ActivityIndicator color="#000" /> : <><Text style={styles.sheetPlaceBidBtnText}>Place Bid</Text><MaterialCommunityIcons name="gavel" size={20} color="#000" style={{ marginLeft: 8 }} /></>}
               </TouchableOpacity>
               <Text style={styles.minIncText}>Min increment: AED {vehicle.bid_control || 100}</Text>
             </View>
-          )
+          ) : isAutoBidSheetVisible ? (
+            <View style={styles.bottomSheet}>
+              <TouchableOpacity style={styles.bottomArrowContainer} onPress={() => setIsAutoBidSheetVisible(false)} >
+                <Feather name="arrow-down" size={24} color="#cadb2a" />
+              </TouchableOpacity>
+              <Text style={styles.winningOfferTitle}>Set Your Maximum Bid</Text>
+              <View style={styles.bidControlRow}>
+                <TouchableOpacity style={styles.circleBtnRed} onPress={handleAutoBidDecrement}><Feather name="minus" size={24} color="#fff" /></TouchableOpacity>
+                <View><Text style={styles.bidAmountText}>{maxBid.toLocaleString()}</Text><Text style={styles.currencyText}>AED</Text></View>
+                <TouchableOpacity style={styles.circleBtnGreen} onPress={handleAutoBidIncrement}><Feather name="plus" size={24} color="#fff" /></TouchableOpacity>
+              </View>
+              <TouchableOpacity style={styles.sheetPlaceBidBtn} onPress={handleAutoBid} disabled={submitting}>
+                {submitting ? <ActivityIndicator color="#000" /> : <><Text style={styles.sheetPlaceBidBtnText}>Set Auto Bid</Text><MaterialCommunityIcons name="auto-fix" size={20} color="#000" style={{ marginLeft: 8 }} /></>}
+              </TouchableOpacity>
+              <Text style={styles.minIncText}>System will auto-bid up to your max amount</Text>
+            </View>
+          ) : null
         ) : viewType === 'upcoming' ? (
           <View style={styles.negotiationFooter}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -1301,7 +1433,12 @@ const styles = StyleSheet.create({
 
   descriptionText: { color: '#ccc', fontSize: 14, fontFamily: 'Poppins', lineHeight: 20 },
   commentBox: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: '#111', padding: 16, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: '#222' },
-  bidNowContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 12, paddingTop: 10, backgroundColor: '#000', borderTopWidth: 1, borderTopColor: '#222' },
+  bidNowContainer: { paddingHorizontal: 16, paddingBottom: 12, paddingTop: 12, backgroundColor: '#000', borderTopWidth: 1, borderTopColor: '#222' },
+  bidFooterButtonRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
+  autoBidBtn: { flex: 1, backgroundColor: 'transparent', borderWidth: 1, borderColor: '#cadb2a', borderRadius: 12, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
+  autoBidText: { color: '#cadb2a', fontSize: 15, fontWeight: 'bold', fontFamily: 'Poppins' },
+  placeBidBtn: { flex: 1, backgroundColor: '#cadb2a', borderRadius: 12, paddingVertical: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  placeBidText: { color: '#000', fontSize: 15, fontWeight: 'bold', fontFamily: 'Poppins' },
   totalPriceLabel: { fontSize: 12, color: '#aaa', fontFamily: 'Poppins' },
   totalPriceValue: { fontSize: 20, color: '#fff', fontWeight: 'bold', fontFamily: 'Lato' },
   bidNowButton: { backgroundColor: '#CADB2A', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 40 },
@@ -1314,8 +1451,8 @@ const styles = StyleSheet.create({
   circleBtnGreen: { width: 50, height: 50, borderRadius: 25, borderWidth: 1, borderColor: '#cadb2a', justifyContent: 'center', alignItems: 'center' },
   bidAmountText: { color: '#fff', fontSize: 32, fontWeight: 'bold', fontFamily: 'Lato', textAlign: 'center' },
   currencyText: { fontSize: 12, color: '#888', textAlign: 'center' },
-  placeBidBtn: { backgroundColor: '#cadb2a', height: 55, borderRadius: 14, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
-  placeBidBtnText: { color: '#000', fontSize: 18, fontWeight: 'bold' },
+  sheetPlaceBidBtn: { backgroundColor: '#cadb2a', height: 55, borderRadius: 14, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
+  sheetPlaceBidBtnText: { color: '#000', fontSize: 18, fontWeight: 'bold' },
   minIncText: { color: '#666', fontSize: 11, textAlign: 'center', marginTop: 15 },
   
   previewContainer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center' },
@@ -1337,6 +1474,81 @@ const styles = StyleSheet.create({
   offerRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 },
   offerItem: { width: '48%', backgroundColor: '#000', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#222', alignItems: 'center' },
   offerLabel: { color: '#888', fontSize: 10, marginBottom: 4, fontFamily: 'Poppins' },
+  
+  // 🟢 Sticky Bid Section Styles (shows above footer on scroll)
+  stickyTimerBarWrapper: {
+    overflow: 'hidden',
+  },
+  stickyBidSection: {
+    backgroundColor: '#000',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#cadb2a',
+  },
+  stickyPriceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    gap: 12,
+  },
+  stickyPriceBox: {
+    flex: 1,
+    backgroundColor: '#111',
+    borderRadius: 12,
+    padding: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#222',
+  },
+  stickyPriceBoxHighlight: {
+    borderColor: '#cadb2a',
+  },
+  stickyPriceLabel: {
+    color: '#888',
+    fontSize: 11,
+    fontFamily: 'Poppins',
+    marginBottom: 4,
+  },
+  stickyPriceValue: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    fontFamily: 'Lato',
+  },
+  stickyTimerRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  timerBox: {
+    backgroundColor: '#111',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    minWidth: 55,
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  timerNumber: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    fontFamily: 'Lato',
+  },
+  timerLabel: {
+    color: '#888',
+    fontSize: 10,
+    fontFamily: 'Poppins',
+    marginTop: 2,
+  },
+  timerColon: {
+    color: '#cadb2a',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginHorizontal: 6,
+  },
   offerValue: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
   finalPriceText: { color: '#fff', fontSize: 24, fontWeight: 'bold', textAlign: 'center', marginVertical: 10, fontFamily: 'Lato' },
   offerSubText: { color: '#888', fontSize: 12, textAlign: 'center', fontFamily: 'Poppins' },
