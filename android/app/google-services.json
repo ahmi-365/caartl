@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "919267898292",
+    "project_id": "caartl",
+    "storage_bucket": "caartl.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:919267898292:android:9183e076001462fffd78e1",
+        "android_client_info": {
+          "package_name": "com.mycompany.myapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBqsus6m_MclPBqGOGuqsSL7XpKVjObLkk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

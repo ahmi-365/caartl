@@ -33,6 +33,7 @@ import ViewBookingScreen from '../screens/ViewBookingScreen';
 
 // Navigator
 import { DrawerNavigator } from './DrawerNavigator';
+import VerifyScreen from '../screens/VerifyScreen';
 
 export type NotificationItem = {
   id: string;
@@ -45,6 +46,7 @@ export type NotificationItem = {
 export type RootStackParamList = {
   Login: undefined;
   Register: undefined;
+  Verify: undefined;
   DrawerRoot: undefined; // Contains ListedVehicles, Auctions, MyBookings
   FavoritesScreen: undefined;
   ProfileScreen: undefined;
@@ -93,6 +95,7 @@ const AuthStack = () => (
   >
     <Stack.Screen name="Login" component={LoginScreen} />
     <Stack.Screen name="Register" component={RegisterScreen} />
+    <Stack.Screen name="Verify" component={VerifyScreen} />
   </Stack.Navigator>
 );
 
@@ -159,7 +162,7 @@ const MainAppStack = () => {
 };
 
 const AppNavigator = () => {
-  const { isLoading, userToken, isGuest } = useAuth();
+  const { isLoading, userToken, isGuest, user } = useAuth();
 
   if (isLoading) {
     return <SplashScreenDark />;
@@ -167,7 +170,16 @@ const AppNavigator = () => {
 
   return (
     <NavigationContainer theme={MyDarkTheme}>
-      {userToken || isGuest ? <MainAppStack /> : <AuthStack />}
+      {/* {userToken || isGuest ? <MainAppStack /> : <AuthStack />} */}
+      {
+        // (userToken && user?.id && user?.phone_verified_at)
+        (userToken && user?.id)
+          ||
+          isGuest ?
+          <MainAppStack />
+          :
+          <AuthStack />
+      }
     </NavigationContainer>
   );
 };

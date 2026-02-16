@@ -41,6 +41,7 @@ export interface User {
     name: string;
     email: string;
     email_verified_at: string | null;
+    phone_verified_at: string | null;
     bio: string | null;
     phone: string | null;
     photo: string | null;

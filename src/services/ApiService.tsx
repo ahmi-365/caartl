@@ -91,6 +91,20 @@ class ApiService {
     return this.apiCall('/register', { method: 'POST', body: JSON.stringify(userData) });
   }
 
+  async verifyPhone(phone: string, otp: string): Promise<Models.ApiResult<any>> {
+    return this.apiCall('/verify-phone-otp', {
+      method: 'POST',
+      body: JSON.stringify({ phone, otp })
+    });
+  }
+
+  async resendOtp(phone: string): Promise<Models.ApiResult<any>> {
+    return this.apiCall('/resend-phone-otp', {
+      method: 'POST',
+      body: JSON.stringify({ phone })
+    });
+  }
+
   async login(credentials: any): Promise<Models.ApiResult<Models.LoginResponse>> {
     return this.apiCall('/login', { method: 'POST', body: JSON.stringify(credentials) });
   }
@@ -118,6 +132,8 @@ class ApiService {
   async getFavorites(): Promise<Models.ApiResult<Models.FavoritesListResponse>> {
     return this.apiCall('/favorites');
   }
+
+
 
   // ... (Auction/Bid methods) ...
 
@@ -294,6 +310,16 @@ class ApiService {
       return { success: false, status: 0, data: { message: 'Network error.' } };
     }
   }
+
+
+  async saveNotificationToken(deviceToken: string): Promise<Models.ApiResult<any>> {
+    return this.apiCall('/notifications/save-token', {
+      method: 'POST',
+      body: JSON.stringify({ device_token: deviceToken })
+    });
+  }
+
+
 
   // ... (Other methods) ...
 

@@ -10,6 +10,7 @@ import { useEffect } from "react";
 import { Platform } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import * as NavigationBar from 'expo-navigation-bar';
+import { PushNotificationRequester } from "./src/services/PushNotificationRequester";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -45,6 +46,7 @@ export default function App() {
         <ThemeProvider>
           <AuthProvider>
             <AlertProvider>
+              <PushNotificationRequester />
               <AppNavigator />
               <StatusBar style="light" backgroundColor="#000000" />
             </AlertProvider>

@@ -115,15 +115,17 @@ interface SignUpErrors {
   password?: string;
   confirmPassword?: string;
   package?: string;
+  phone?: string;
 }
 
 const SignUpScreen: React.FC = () => {
-  const navigation = useNavigation<SignUpScreenNavigationProp>();
+  const navigation = useNavigation<any>();
   const { register } = useAuth();
   const { showAlert } = useAlert();
 
   const [name, setName] = useState<string>("");
   const [email, setEmail] = useState<string>("");
+  const [phone, setPhone] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [confirmPassword, setConfirmPassword] = useState<string>("");
 
@@ -172,12 +174,13 @@ const SignUpScreen: React.FC = () => {
     if (!confirmPassword) newErrors.confirmPassword = "Please confirm your password.";
     else if (password !== confirmPassword) newErrors.confirmPassword = "Passwords do not match.";
     if (!selectedPackageId) newErrors.package = "Please select a plan.";
-
+    if (!phone) newErrors.phone = "Phone is required.";
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSignUp = async () => {
+
     if (!validateFields()) return;
     setLoading(true);
     try {
@@ -186,9 +189,21 @@ const SignUpScreen: React.FC = () => {
         email: email.trim().toLowerCase(),
         password,
         package_id: selectedPackageId,
+        phone,
       });
       if (!success) {
         showAlert("Registration Failed", "This email may already be taken. Please try again.");
+      } else {
+        navigation.navigate('Verify', {
+          data: {
+            name,
+            email: email.trim().toLowerCase(),
+            password,
+            package_id: selectedPackageId,
+            phone,
+          }
+        })
+        return;
       }
     } catch (error) {
       console.error("Registration component error:", error);
@@ -230,6 +245,15 @@ const SignUpScreen: React.FC = () => {
                 <TextInput style={styles.textInput} placeholder="Email" placeholderTextColor="rgba(0, 0, 0, 0.37)" onChangeText={text => { setEmail(text); if (errors.email) setErrors({ ...errors, email: undefined }); }} keyboardType="email-address" autoCapitalize="none" editable={!loading} />
               </View>
               {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
+            </View>
+
+            {/* Phone Input */}
+
+            <View style={styles.inputWrapper}>
+              <View style={[styles.inputContainer, errors.phone ? styles.inputError : null]}>
+                <Image source={{ uri: "https://static.codia.ai/image/2025-10-20/bTCs4R8GxF.png" }} style={styles.inputIcon} />
+                <TextInput style={styles.textInput} placeholder="Phone" placeholderTextColor="rgba(0, 0, 0, 0.37)" onChangeText={text => { setPhone(text); if (errors.phone) setErrors({ ...errors, phone: undefined }); }} keyboardType="phone-pad" editable={!loading} />
+              </View>
             </View>
 
             {/* Password Input */}

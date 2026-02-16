@@ -15,6 +15,8 @@ interface AuthContextType {
     logout: () => void;
     updateUser: (user: Models.User) => void;
     guestLogin: () => Promise<void>;
+    verifyPhone: (phone: string, code: string) => Promise<boolean>;
+    resendOtp: (phone: string) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
@@ -80,6 +82,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     const login = async (credentials: any) => {
         const result = await apiService.login(credentials);
+        console.log("result ==>>", result);
         if (result.success && result.data.access_token) {
             const { access_token, user } = result.data;
             const normalizedUser = normalizeUser(user);
@@ -93,12 +96,39 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     const register = async (userData: any) => {
         const result = await apiService.register(userData);
-        if (result.success && result.data.token) {
+        console.log("result ==>>", result);
+        // if (result.success && result.data.token) {
+        if (result.success) {
+            const { token, user } = result.data;
+            const normalizedUser = normalizeUser(user);
+            setUserToken(token);
+            setUser(normalizedUser);
+            // await apiService.storeUserData(normalizedUser, token);
+            // console.log("normalizedUser ==>>", normalizedUser);
+            return true;
+        }
+        return false;
+    };
+
+    const verifyPhone = async (phone: string, code: string) => {
+        const result = await apiService.verifyPhone(phone, code);
+        console.log("verifyPhone ==>>", result);
+        if (result.success) {
             const { token, user } = result.data;
             const normalizedUser = normalizeUser(user);
             setUserToken(token);
             setUser(normalizedUser);
             await apiService.storeUserData(normalizedUser, token);
+            console.log("normalizedUser ==>>", normalizedUser);
+            return true;
+        }
+        return false;
+    };
+    
+    const resendOtp = async (phone: string) => {
+        const result = await apiService.resendOtp(phone);
+        console.log("resendOtp ==>>", result);
+        if (result.success) {
             return true;
         }
         return false;
@@ -125,6 +155,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             name: 'Guest',
             email: '',
             email_verified_at: null,
+            phone_verified_at: null,
             bio: null,
             phone: '',
             photo: null,
@@ -159,6 +190,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         logout,
         updateUser,
         guestLogin,
+        verifyPhone,
+        resendOtp,
     };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
