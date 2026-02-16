@@ -7,6 +7,25 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:919267898292:android:a0528b7e75960633fd78e1",
+        "android_client_info": {
+          "package_name": "com.caartl.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBqsus6m_MclPBqGOGuqsSL7XpKVjObLkk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:919267898292:android:9183e076001462fffd78e1",
         "android_client_info": {
           "package_name": "com.mycompany.myapp"
