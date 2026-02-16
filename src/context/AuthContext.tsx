@@ -82,7 +82,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     const login = async (credentials: any) => {
         const result = await apiService.login(credentials);
-        console.log("result ==>>", result);
         if (result.success && result.data.access_token) {
             const { access_token, user } = result.data;
             const normalizedUser = normalizeUser(user);
@@ -96,7 +95,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     const register = async (userData: any) => {
         const result = await apiService.register(userData);
-        console.log("result ==>>", result);
         // if (result.success && result.data.token) {
         if (result.success) {
             const { token, user } = result.data;
@@ -112,14 +110,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     const verifyPhone = async (phone: string, code: string) => {
         const result = await apiService.verifyPhone(phone, code);
-        console.log("verifyPhone ==>>", result);
         if (result.success) {
             const { token, user } = result.data;
             const normalizedUser = normalizeUser(user);
             setUserToken(token);
             setUser(normalizedUser);
             await apiService.storeUserData(normalizedUser, token);
-            console.log("normalizedUser ==>>", normalizedUser);
             return true;
         }
         return false;
@@ -127,7 +123,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     
     const resendOtp = async (phone: string) => {
         const result = await apiService.resendOtp(phone);
-        console.log("resendOtp ==>>", result);
         if (result.success) {
             return true;
         }

@@ -1,0 +1,4 @@
+password: b2El5CwAoXY0
+key: caartl-release-key
+password: b2El5CwAoXY0
+key alias: release-key

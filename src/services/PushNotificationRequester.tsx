@@ -58,13 +58,12 @@ export const PushNotificationRequester: React.FC = () => {
   const getFcmToken = async () => {
     try {
       const fcmToken = await messaging().getToken();
-      console.log("fcmToken ==>>", currentUser);
       // Save token to backend
       const result = await ApiService.saveNotificationToken(fcmToken);
     } catch (error) {
       console.log("Error", error);
     }
-    }
+  }
 
 
 
@@ -136,11 +135,10 @@ export const PushNotificationRequester: React.FC = () => {
   useEffect(() => {
     try {
       requestUserPermission();
-
     } catch (error) {
 
     }
-  }, [currentUser?.id]);
+  }, [currentUser?.id, currentUser?.phone_verified_at]);
   // END
 
 
