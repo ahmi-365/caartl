@@ -1,57 +1,152 @@
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React from 'react';
-import { Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { Pressable, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import type { NotificationItem, RootStackParamList } from '../navigation/AppNavigator';
+import ApiService from '../services/ApiService';
+import * as Models from '../data/modal';
 
 interface TopBarProps {
-  onMenuPress?: () => void; // Optional prop
+  onMenuPress?: () => void;
   onNotificationPress?: () => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({ onMenuPress, onNotificationPress }) => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const [showDropdown, setShowDropdown] = React.useState(false);
-  const [notifications, setNotifications] = React.useState<NotificationItem[]>([
-    {
-      id: 'n-1001',
-      title: 'Bid accepted',
-      message: 'Your bid on the 2020 Tesla Model 3 was accepted.',
-      time: '2m ago',
-      isRead: false,
-    },
-    {
-      id: 'n-1002',
-      title: 'Price reduced',
-      message: 'A vehicle on your watchlist just dropped in price.',
-      time: '1h ago',
-      isRead: false,
-    },
-    {
-      id: 'n-1003',
-      title: 'Auction reminder',
-      message: 'Live auction starts in 30 minutes. Tap to view.',
-      time: 'Today',
-      isRead: true,
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+
+  // 🟢 Helper: Calculate "Time Ago"
+  const getRelativeTime = (dateString: string) => {
+    const now = new Date();
+    const past = new Date(dateString);
+    const diffInSeconds = Math.floor((now.getTime() - past.getTime()) / 1000);
+
+    if (diffInSeconds < 60) return 'Just now';
+    const diffInMinutes = Math.floor(diffInSeconds / 60);
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    if (diffInHours < 24) return `${diffInHours}h ago`;
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays < 7) return `${diffInDays}d ago`;
+    
+    return past.toLocaleDateString(); // Fallback to date
+  };
+
+  // 🟢 Helper: Map API Data to UI Title/Message
+ const mapNotificationToItem = (apiNotif: Models.ApiNotification): NotificationItem => {
+  // Default values
+  let title = apiNotif.data.title || 'Notification';
+  let message = apiNotif.data.message || 'You have a new update.';
+
+  // Specific Logic based on notification Type if title/message are missing in data
+  if (!apiNotif.data.title && apiNotif.type.includes('BookingStatusChangedNotification')) {
+    const status = apiNotif.data.status?.replace('_', ' ') || 'updated';
+    title = `Booking ${status.charAt(0).toUpperCase() + status.slice(1)}`;
+    message = `Your booking for ${apiNotif.data.vehicle_title || 'vehicle'} is now ${status}.`;
+  } else if (!apiNotif.data.title && apiNotif.type.includes('PaymentSlipUploadedNotification')) {
+    title = 'Payment Slip Uploaded';
+    message = apiNotif.data.message || `Payment slip uploaded for invoice #${apiNotif.data.invoice_id}`;
+  }
+
+  return {
+    id: apiNotif.id,
+    title: title,
+    message: message,
+    time: getRelativeTime(apiNotif.created_at),
+    isRead: !!apiNotif.read_at,
+    data: apiNotif.data
+  };
+};
+
+  // 🟢 Fetch Notifications
+  const fetchNotifications = async () => {
+    if (notifications.length === 0) setLoading(true);
+    
+    try {
+      const response = await ApiService.getNotifications();
+      if (response.success && response.data.data.data) {
+        const mappedData = response.data.data.data.map(mapNotificationToItem);
+        setNotifications(mappedData);
+      }
+    } catch (error) {
+      console.error('Failed to fetch notifications', error);
+    } finally {
+      setLoading(false);
     }
-  ]);
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchNotifications();
+    },[])
+  );
 
   const handleBellPress = () => {
     setShowDropdown(prev => !prev);
+    if (!showDropdown) {
+        fetchNotifications(); 
+    }
     if (onNotificationPress) {
       onNotificationPress();
     }
   };
 
-  const handleNotificationItemPress = (item: NotificationItem) => {
+  const handleNotificationItemPress = async (item: NotificationItem) => {
+    // 1. Optimistic UI update
     setNotifications(prev =>
       prev.map(entry => (entry.id === item.id ? { ...entry, isRead: true } : entry))
     );
+
+    // 2. Call API
+    try {
+      await ApiService.markNotificationAsRead(item.id);
+    } catch (error) {
+      console.log("Error marking read", error);
+    }
+
+    // 3. Navigation logic
+    if (item.data) {
+      const { vehicle_id, bid_id, invoice_id, type } = item.data;
+
+      // Navigate to Auction/Vehicle Detail
+      if (vehicle_id) {
+          // 🟢 UPDATED LOGIC: If bid_approved, open in negotiation view
+          if (type === 'bid_approved') {
+               console.log("Navigating to LiveAuction (Negotiation)", vehicle_id);
+               navigation.navigate('LiveAuction', { carId: Number(vehicle_id), viewType: 'negotiation' });
+               setShowDropdown(false);
+          } 
+          // If other bid related -> LiveAuction
+          else if (bid_id || type === 'outbid' || type === 'bid_placed') {
+               console.log("Navigating to LiveAuction", vehicle_id);
+               navigation.navigate('LiveAuction', { carId: Number(vehicle_id) });
+               setShowDropdown(false);
+          } 
+          // Default -> CarDetailPage
+          else {
+               console.log("Navigating to CarDetailPage", vehicle_id);
+               navigation.navigate('CarDetailPage', { carId: Number(vehicle_id) });
+               setShowDropdown(false);
+          }
+      } 
+      else if (invoice_id) {
+           console.log("Navigate to Invoice", invoice_id);
+           setShowDropdown(false);
+           // navigation.navigate('InvoiceDetail', { invoiceId: invoice_id }); 
+      }
+    }
   };
 
-  const handleReadAll = () => {
+  const handleReadAll = async () => {
     setNotifications(prev => prev.map(entry => ({ ...entry, isRead: true })));
+    try {
+      await ApiService.markAllNotificationsAsRead();
+    } catch (error) {
+        console.log("Error marking all read", error);
+    }
   };
 
   const handleViewAll = () => {
@@ -62,6 +157,9 @@ export const TopBar: React.FC<TopBarProps> = ({ onMenuPress, onNotificationPress
   const unreadNotifications = notifications.filter(item => !item.isRead);
   const readNotifications = notifications.filter(item => item.isRead);
 
+  const displayUnread = unreadNotifications.slice(0, 3);
+  const displayRead = readNotifications.slice(0, 5 - displayUnread.length);
+
   return (
     <>
       {showDropdown && (
@@ -69,7 +167,6 @@ export const TopBar: React.FC<TopBarProps> = ({ onMenuPress, onNotificationPress
       )}
 
       <View style={styles.header}>
-        {/* Left Side: Menu Button (Only if handler exists) OR Spacer */}
         {onMenuPress ? (
           <TouchableOpacity onPress={onMenuPress} activeOpacity={0.7} style={styles.headerButton}>
             <Svg width="26" height="24" viewBox="0 0 26 24" fill="none">
@@ -79,62 +176,75 @@ export const TopBar: React.FC<TopBarProps> = ({ onMenuPress, onNotificationPress
             </Svg>
           </TouchableOpacity>
         ) : (
-          // Render an empty view of same size to keep logo centered if needed
           <View style={{ width: 42 }} />
         )}
 
         <Text style={styles.logo}>caartI</Text>
 
         <TouchableOpacity onPress={handleBellPress} activeOpacity={0.7} style={styles.headerButton}>
-          <Svg width="24" height="28" viewBox="0 0 24 28" fill="none">
-            <Path d="M12 0C10.9 0 10 0.9 10 2C10 2.6 10.3 3.1 10.7 3.4C7.1 4.4 4.5 7.6 4.5 11.5V17L2 19.5V21H22V19.5L19.5 17V11.5C19.5 7.6 16.9 4.4 13.3 3.4C13.7 3.1 14 2.6 14 2C14 0.9 13.1 0 12 0ZM12 28C13.7 28 15 26.7 15 25H9C9 26.7 10.3 28 12 28Z" fill="white" />
-          </Svg>
+          <View>
+            <Svg width="24" height="28" viewBox="0 0 24 28" fill="none">
+              <Path d="M12 0C10.9 0 10 0.9 10 2C10 2.6 10.3 3.1 10.7 3.4C7.1 4.4 4.5 7.6 4.5 11.5V17L2 19.5V21H22V19.5L19.5 17V11.5C19.5 7.6 16.9 4.4 13.3 3.4C13.7 3.1 14 2.6 14 2C14 0.9 13.1 0 12 0ZM12 28C13.7 28 15 26.7 15 25H9C9 26.7 10.3 28 12 28Z" fill="white" />
+            </Svg>
+            {unreadNotifications.length > 0 && (
+                <View style={styles.badge}>
+                    <Text style={styles.badgeText}>{unreadNotifications.length > 9 ? '9+' : unreadNotifications.length}</Text>
+                </View>
+            )}
+          </View>
         </TouchableOpacity>
 
         {showDropdown && (
           <View style={styles.dropdown}>
             <Text style={styles.dropdownTitle}>Notifications</Text>
-            {unreadNotifications.length > 0 && (
-              <Text style={styles.sectionTitle}>Unread</Text>
-            )}
-            {unreadNotifications.map(item => (
-              <TouchableOpacity
-                key={item.id}
-                activeOpacity={0.9}
-                style={[styles.dropdownItem, styles.unreadItem]}
-                onPress={() => handleNotificationItemPress(item)}
-              >
-                <View style={styles.dropdownItemRow}>
-                  <View style={styles.dropdownItemTitleRow}>
-                    <View style={styles.unreadDot} />
-                    <Text style={styles.dropdownItemTitle} numberOfLines={1}>{item.title}</Text>
-                  </View>
-                  <Text style={styles.dropdownItemTime}>{item.time}</Text>
-                </View>
-                <Text style={styles.dropdownItemMessage} numberOfLines={2}>{item.message}</Text>
-              </TouchableOpacity>
-            ))}
+            
+            {loading ? (
+                <ActivityIndicator size="small" color="#cadb2a" style={{marginVertical: 20}} />
+            ) : (
+                <>
+                    {displayUnread.length > 0 && (
+                    <Text style={styles.sectionTitle}>Unread</Text>
+                    )}
+                    {displayUnread.map(item => (
+                    <TouchableOpacity
+                        key={item.id}
+                        activeOpacity={0.9}
+                        style={[styles.dropdownItem, styles.unreadItem]}
+                        onPress={() => handleNotificationItemPress(item)}
+                    >
+                        <View style={styles.dropdownItemRow}>
+                        <View style={styles.dropdownItemTitleRow}>
+                            <View style={styles.unreadDot} />
+                            <Text style={styles.dropdownItemTitle} numberOfLines={1}>{item.title}</Text>
+                        </View>
+                        <Text style={styles.dropdownItemTime}>{item.time}</Text>
+                        </View>
+                        <Text style={styles.dropdownItemMessage} numberOfLines={2}>{item.message}</Text>
+                    </TouchableOpacity>
+                    ))}
 
-            {readNotifications.length > 0 && (
-              <Text style={styles.sectionTitle}>Read</Text>
-            )}
-            {readNotifications.map(item => (
-              <TouchableOpacity
-                key={item.id}
-                activeOpacity={0.9}
-                style={[styles.dropdownItem, styles.readItem]}
-                onPress={() => handleNotificationItemPress(item)}
-              >
-                <View style={styles.dropdownItemRow}>
-                  <Text style={styles.dropdownItemTitle} numberOfLines={1}>{item.title}</Text>
-                  <Text style={styles.dropdownItemTime}>{item.time}</Text>
-                </View>
-                <Text style={styles.dropdownItemMessage} numberOfLines={2}>{item.message}</Text>
-              </TouchableOpacity>
-            ))}
+                    {displayRead.length > 0 && (
+                    <Text style={styles.sectionTitle}>Recent</Text>
+                    )}
+                    {displayRead.map(item => (
+                    <TouchableOpacity
+                        key={item.id}
+                        activeOpacity={0.9}
+                        style={[styles.dropdownItem, styles.readItem]}
+                        onPress={() => handleNotificationItemPress(item)}
+                    >
+                        <View style={styles.dropdownItemRow}>
+                        <Text style={styles.dropdownItemTitle} numberOfLines={1}>{item.title}</Text>
+                        <Text style={styles.dropdownItemTime}>{item.time}</Text>
+                        </View>
+                        <Text style={styles.dropdownItemMessage} numberOfLines={2}>{item.message}</Text>
+                    </TouchableOpacity>
+                    ))}
 
-            {notifications.length === 0 && (
-              <Text style={styles.emptyText}>No notifications yet.</Text>
+                    {notifications.length === 0 && (
+                    <Text style={styles.emptyText}>No notifications yet.</Text>
+                    )}
+                </>
             )}
 
             <View style={styles.dropdownFooter}>
@@ -166,9 +276,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 25.5,
-    // Reduced padding values to decrease height
-    paddingTop: 10,    // Was 20
-    paddingBottom: 10, // Was 16
+    paddingTop: 10,
+    paddingBottom: 10,
     position: 'absolute',
     top: 0,
     left: 0,
@@ -178,6 +287,23 @@ const styles = StyleSheet.create({
   },
   headerButton: {
     padding: 8,
+  },
+  badge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: '#ff4444',
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 2,
+  },
+  badgeText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: 'bold',
   },
   dropdownBackdrop: {
     position: 'absolute',

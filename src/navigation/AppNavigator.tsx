@@ -34,6 +34,8 @@ import ViewBookingScreen from '../screens/ViewBookingScreen';
 // Navigator
 import { DrawerNavigator } from './DrawerNavigator';
 import VerifyScreen from '../screens/VerifyScreen';
+// 🟢 NEW: Navigation Service Ref
+import { navigationRef } from './NavigationService'; 
 
 export type NotificationItem = {
   id: string;
@@ -41,6 +43,7 @@ export type NotificationItem = {
   message: string;
   time: string;
   isRead: boolean;
+  data?: any; // 🟢 Added to carry payload for navigation
 };
 
 export type RootStackParamList = {
@@ -169,10 +172,9 @@ const AppNavigator = () => {
   }
 
   return (
-    <NavigationContainer theme={MyDarkTheme}>
-      {/* {userToken || isGuest ? <MainAppStack /> : <AuthStack />} */}
+    // 🟢 Attach ref here for external navigation from PushNotificationRequester
+    <NavigationContainer theme={MyDarkTheme} ref={navigationRef}>
       {
-        // (userToken && user?.id && user?.phone_verified_at)
         (userToken && user?.id)
           ||
           isGuest ?

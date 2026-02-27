@@ -1,4 +1,4 @@
-package com.mycompany.myapp
+package com.caartl.app
 
 import android.app.Application
 import android.content.res.Configuration

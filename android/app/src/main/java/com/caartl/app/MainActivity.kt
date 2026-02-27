@@ -1,4 +1,4 @@
-package com.mycompany.myapp
+package com.caartl.app
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

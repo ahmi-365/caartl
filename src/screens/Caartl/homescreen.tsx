@@ -45,7 +45,7 @@ export const HomescreenLight = () => {
 
   const [activeTab, setActiveTab] = useState<'live' | 'upcoming' | 'negotiations'>('live');
   const [searchText, setSearchText] = useState('');
-  const [filterVisible, setFilterVisible] = useState(false);
+  const[filterVisible, setFilterVisible] = useState(false);
 
   // Filter State
   const [activeFilters, setActiveFilters] = useState<FilterState>({});
@@ -57,9 +57,9 @@ export const HomescreenLight = () => {
   // Loading & Pagination State
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
+  const[refreshing, setRefreshing] = useState(false);
   const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
+  const[hasMore, setHasMore] = useState(true);
 
   // ------------------------------------------------------------------
   // API Call - Auctions (Live & Upcoming)
@@ -105,10 +105,15 @@ export const HomescreenLight = () => {
       const result = await apiService.apiCall<{ data: any[] }>('/user/biddings?status=accepted');
 
       if (result.success && Array.isArray(result.data.data)) {
-        const negotiationVehicles = result.data.data.map((bid: any) => {
-          // 🟢 CRITICAL FIX: Extract bid_amount and inject it into the vehicle object
-          // The API returns vehicle.current_bid as null for negotiations, 
-          // so we use the bid.bid_amount (your accepted offer) instead.
+        
+        // 🟢 Sort by latest updated_at or created_at (Descending)
+        const sortedData = result.data.data.sort((a: any, b: any) => {
+            const dateA = new Date(a.updated_at || a.created_at || 0).getTime();
+            const dateB = new Date(b.updated_at || b.created_at || 0).getTime();
+            return dateB - dateA;
+        });
+
+        const negotiationVehicles = sortedData.map((bid: any) => {
           const vehicle = { ...bid.vehicle }; 
           if (bid.bid_amount) {
             vehicle.current_bid = bid.bid_amount;
@@ -134,7 +139,7 @@ export const HomescreenLight = () => {
     if (activeTab === 'negotiations') {
       fetchNegotiations();
     } else {
-      fetchAuctions(1, isRefresh);
+      fetchAuctions(1, isRefresh, searchText, activeFilters);
     }
   };
 
@@ -164,6 +169,7 @@ export const HomescreenLight = () => {
   };
 
   const handleSearchSubmit = () => {
+    if (activeTab === 'negotiations') return; // Handled locally
     setPage(1);
     setHasMore(true);
     fetchAuctions(1, true, searchText, activeFilters);
@@ -171,6 +177,9 @@ export const HomescreenLight = () => {
 
   const applyFilters = (newFilters: FilterState) => {
     setActiveFilters(newFilters);
+    
+    if (activeTab === 'negotiations') return; // Handled locally
+    
     setPage(1);
     setHasMore(true);
     setAuctions([]);
@@ -181,6 +190,9 @@ export const HomescreenLight = () => {
     setSearchText('');
     const emptyFilters = {};
     setActiveFilters(emptyFilters);
+    
+    if (activeTab === 'negotiations') return; // Handled locally
+    
     setPage(1);
     setHasMore(true);
     fetchAuctions(1, true, '', emptyFilters);
@@ -216,21 +228,59 @@ export const HomescreenLight = () => {
     }
   };
 
-  // --- Render Helper ---
+  // ------------------------------------------------------------------
+  // Render Helper with LOCAL FILTERING for Negotiations
+  // ------------------------------------------------------------------
   const getDisplayData = () => {
+    let dataToDisplay =[];
+
+    // 1. Separate basic list
     if (activeTab === 'negotiations') {
-      return negotiations;
+      dataToDisplay = negotiations;
+    } else {
+      const now = new Date();
+      dataToDisplay = auctions.filter(car => {
+        const start = new Date(car.auction_start_date.replace(' ', 'T'));
+        const end = new Date(car.auction_end_date.replace(' ', 'T'));
+
+        if (activeTab === 'live') return now >= start && now <= end;
+        if (activeTab === 'upcoming') return now < start;
+        return true;
+      });
     }
 
-    const now = new Date();
-    return auctions.filter(car => {
-      const start = new Date(car.auction_start_date.replace(' ', 'T'));
-      const end = new Date(car.auction_end_date.replace(' ', 'T'));
+    // 2. 🟢 Apply Local Filters exclusively for Negotiations 
+    // (Because API filters only work on auctions)
+    if (activeTab === 'negotiations') {
+      const { condition, make_id, vehicle_model_id, year, min_price, max_price } = activeFilters;
+      const hasSearch = searchText.trim().length > 0;
+      const searchLower = searchText.trim().toLowerCase();
 
-      if (activeTab === 'live') return now >= start && now <= end;
-      if (activeTab === 'upcoming') return now < start;
-      return true;
-    });
+      dataToDisplay = dataToDisplay.filter(car => {
+        // --- Search Match ---
+        if (hasSearch) {
+          const titleMatch = car.title?.toLowerCase().includes(searchLower);
+          const brandMatch = car.brand?.name?.toLowerCase().includes(searchLower);
+          const modelMatch = car.vehicle_model?.name?.toLowerCase().includes(searchLower);
+          if (!titleMatch && !brandMatch && !modelMatch) return false;
+        }
+
+        // --- Filters Match ---
+        if (make_id && car.brand_id !== make_id) return false;
+        if (vehicle_model_id && car.vehicle_model_id !== vehicle_model_id) return false;
+        if (year && car.year !== year) return false;
+        if (condition && car.condition?.toLowerCase() !== condition) return false;
+
+        // --- Price Match ---
+        const price = Number(car.current_bid || car.price || car.starting_bid_amount || 0);
+        if (min_price && price < min_price) return false;
+        if (max_price && price > max_price) return false;
+
+        return true;
+      });
+    }
+
+    return dataToDisplay;
   };
 
   const displayData = getDisplayData();
@@ -247,7 +297,7 @@ export const HomescreenLight = () => {
 
       {/* Always show search, filters, and tabs. Only shimmer the card list area below. */}
       <FlatList
-        data={loading ? [] : displayData}
+        data={loading ?[] : displayData}
         keyExtractor={(item) => item.id?.toString?.() ?? Math.random().toString()}
         renderItem={({ item }) => (
           <CarCard
@@ -336,7 +386,7 @@ export const HomescreenLight = () => {
                 </TouchableOpacity>
               ))}
             </View>
-            {/* 🟢 Shimmer skeletons only below tabs/listing area */}
+            
             {loading && (
               <View style={{ marginTop: 10, paddingBottom: 100 }}>
                 {[1, 2, 3, 4].map((_, idx) => (
@@ -354,7 +404,9 @@ export const HomescreenLight = () => {
         ListEmptyComponent={
           !loading ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyStateText}>No Auctions Found.</Text>
+              <Text style={styles.emptyStateText}>
+                 {activeTab === 'negotiations' ? 'No Negotiations Found.' : 'No Auctions Found.'}
+              </Text>
             </View>
           ) : null
         }

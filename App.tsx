@@ -22,10 +22,9 @@ export default function App() {
   useEffect(() => {
     const prepare = async () => {
       if (Platform.OS === 'android') {
-        // Set bar to black and visible
         await NavigationBar.setBackgroundColorAsync("#000000");
         await NavigationBar.setButtonStyleAsync("light");
-        await NavigationBar.setVisibilityAsync("visible"); // Ensure it's visible
+        await NavigationBar.setVisibilityAsync("visible");
       }
 
       if (fontsLoaded) {
@@ -46,6 +45,7 @@ export default function App() {
         <ThemeProvider>
           <AuthProvider>
             <AlertProvider>
+              {/* 🟢 Ensure requester is here */}
               <PushNotificationRequester />
               <AppNavigator />
               <StatusBar style="light" backgroundColor="#000000" />

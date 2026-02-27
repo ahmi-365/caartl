@@ -81,8 +81,8 @@ export const BottomNav = () => {
       >
         <View style={styles.bottomNav}>
           <TouchableOpacity style={styles.navItem} onPress={goHome} activeOpacity={0.7}>
-            <MaterialCommunityIcons name="car" size={26} color={getColor('home')} />
-            <Text style={[styles.navLabel, { color: getColor('home') }]}>Home</Text>
+            <MaterialCommunityIcons name="shopping" size={26} color={getColor('home')} />
+            <Text style={[styles.navLabel, { color: getColor('home') }]}>Buy</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.navItem} onPress={goAuction} activeOpacity={0.7}>

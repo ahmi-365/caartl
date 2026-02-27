@@ -14,7 +14,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.mycompany.myapp"
+      "bundleIdentifier": "com.caartl.app"
     },
     "android": {
       "adaptiveIcon": {
@@ -22,7 +22,7 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.mycompany.myapp",
+      "package": "com.caartl.app",
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSyAfVpjHZOorgnONhgSzFNvNBzF2oALsmIU"
@@ -36,6 +36,9 @@
       "eas": {
         "projectId": "9fafc85f-1f8d-4f03-8520-9cde8fc20a48"
       }
-    }
+    },
+    "plugins": [
+      "expo-build-properties"
+    ]
   }
 }

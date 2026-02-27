@@ -369,3 +369,29 @@ export interface Invoice {
     };
     user?: User;
 }
+
+// ===================================
+// NOTIFICATIONS
+// ===================================
+export interface NotificationData {
+    // Existing fields
+    booking_id?: number;
+    vehicle_id?: number;
+    status?: string;
+    vehicle_title?: string;
+    invoice_id?: number;
+    user_id?: number;
+    user_name?: string;
+    user_email?: string;
+    type?: string;
+    message?: string;
+    
+    // 🟢 Added new fields based on API response
+    title?: string;
+    bid_id?: number;
+    link?: string;
+    name?: string;
+    email?: string;
+    
+    [key: string]: any;
+} 

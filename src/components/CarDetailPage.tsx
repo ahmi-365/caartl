@@ -1,3 +1,8 @@
+import { Feather, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
+import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { ResizeMode, Video } from 'expo-av';
+import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
@@ -10,17 +15,11 @@ import {
     NativeSyntheticEvent,
     ScrollView,
     StyleSheet,
-    Text, // 🟢 Used for WhatsApp
+    Text,
     TextInput,
     TouchableOpacity,
     View,
 } from 'react-native';
-// 🟢 Import FlatList from gesture-handler for better gesture support
-import { Feather, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
-import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { ResizeMode, Video } from 'expo-av';
-import { LinearGradient } from 'expo-linear-gradient';
 import {
     FlatList, Gesture,
     GestureDetector,
@@ -47,10 +46,10 @@ type CarDetailNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Ca
 const { width, height } = Dimensions.get('window');
 const STORAGE_BASE_URL = 'https://api.caartl.com/storage/';
 const TAB_BAR_HEIGHT = 60;
-const WHATSAPP_NUMBER = '923094174580'; // 🟢 Target Number
+const WHATSAPP_NUMBER = '923094174580';
 
 // ==========================================
-// 1. UPDATED ZOOMABLE IMAGE (Sliding Compatible)
+// 1. ZOOMABLE IMAGE
 // ==========================================
 const ZoomableImage = ({ uri, onRequestScrollToggle }: { uri: string, onRequestScrollToggle: (locked: boolean) => void }) => {
   const [isZoomed, setIsZoomed] = useState(false);
@@ -142,7 +141,7 @@ const ZoomableImage = ({ uri, onRequestScrollToggle }: { uri: string, onRequestS
 };
 
 // ==========================================
-// 2. UPDATED GALLERY MODAL (FlatList)
+// 2. GALLERY MODAL
 // ==========================================
 const ImagePreviewModal = ({ visible, images = [], initialIndex = 0, onClose, isWhiteBackground = false }: any) => {
   const flatListRef = useRef<FlatList>(null);
@@ -239,19 +238,6 @@ const VideoPlayerModal = ({ visible, videoUrl, onClose }: any) => (
   </Modal>
 );
 
-const SpecCard = ({ icon, title, sub }: { icon: any, title: string, sub: string | number }) => (
-  <View style={styles.specCard}>
-    <MaterialCommunityIcons name={icon} size={28} color="#cadb2a" style={{ marginBottom: 8 }} />
-    <Text style={styles.specTitle}>{title}</Text>
-    <Text style={styles.specSub}>{sub}</Text>
-  </View>
-);
-
-const formatKey = (key: string) => {
-  const result = key.replace(/([A-Z])/g, " $1");
-  return result.charAt(0).toUpperCase() + result.slice(1);
-};
-
 const InspectionAccordion = ({ title, children, isOpen, onPress }: any) => (
   <View style={styles.accordionContainer}>
     <TouchableOpacity style={styles.accordionHeader} onPress={onPress}>
@@ -294,6 +280,12 @@ const getSeverityBorderColor = (severity: string) => {
   return '#333';
 };
 
+const formatEndedDate = (dateStr: string) => {
+  if (!dateStr) return '';
+  const date = new Date(dateStr.replace(' ', 'T'));
+  return `Auction Ended ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+};
+
 // ==========================================
 // MAIN COMPONENT
 // ==========================================
@@ -316,11 +308,10 @@ export const CarDetailPage = () => {
   // UI States
   const [activeBannerIndex, setActiveBannerIndex] = useState(0);
   const [activeInspectionIndex, setActiveInspectionIndex] = useState(0);
-  const [showAllFeatures, setShowAllFeatures] = useState(false);
-  const [showAllDetails, setShowAllDetails] = useState(false);
   const [expandedDamageCategories, setExpandedDamageCategories] = useState<{ [key: string]: boolean }>({});
-  const [activeAccordion, setActiveAccordion] = useState<string | null>('Engine');
-  const [activeTab, setActiveTab] = useState('Overview');
+  const [activeAccordion, setActiveAccordion] = useState<string | null>('Engine & Transmission');
+  const [activeTab, setActiveTab] = useState('Car Details');
+  const [showFaultsList, setShowFaultsList] = useState(false);
 
   // Media States
   const [previewImages, setPreviewImages] = useState<string[]>([]);
@@ -336,7 +327,6 @@ export const CarDetailPage = () => {
   const [inqEmail, setInqEmail] = useState('');
   const [inqPhone, setInqPhone] = useState('');
   const [inqAddress, setInqAddress] = useState('');
-  // 🟢 New Comment State
   const [inqComment, setInqComment] = useState('');
   
   const [submittingInquiry, setSubmittingInquiry] = useState(false);
@@ -425,12 +415,10 @@ export const CarDetailPage = () => {
   };
 
   const handleBookNow = () => {
-    // 🟢 Guest check
     if (isGuest) {
       setShowLoginAlert(true);
       return;
     }
-    // 🟢 Unapproved user check
     if (isUnapproved) {
       setShowApprovalAlert(true);
       return;
@@ -457,18 +445,13 @@ export const CarDetailPage = () => {
     setVideoModalVisible(true);
   };
 
-  // 🟢 UPDATED: Send Inquiry via WhatsApp
   const handleSubmitInquiry = async () => {
     if (!inqName) {
       showAlert("Required", "Please enter your Name.");
       return;
     }
-
     setSubmittingInquiry(true);
-
-    const carName = `${vehicle.brand?.name || ''} ${vehicle.vehicle_model?.name || ''} ${vehicle.year || ''}`;
-    
-    // Construct Message
+    const carName = fullData?.vehicle ? `${fullData.vehicle.brand?.name || ''} ${fullData.vehicle.vehicle_model?.name || ''} ${fullData.vehicle.year || ''}` : 'Vehicle';
     const message = `Hello, I am interested in this car:
 *${carName}* (ID: ${carId})
 
@@ -481,14 +464,12 @@ Address: ${inqAddress || 'N/A'}
 *Comment:*
 ${inqComment}`;
 
-    // Create WhatsApp Link
     const url = `whatsapp://send?phone=${WHATSAPP_NUMBER}&text=${encodeURIComponent(message)}`;
-
     try {
         const supported = await Linking.canOpenURL(url);
         if (supported) {
             await Linking.openURL(url);
-            setInquireVisible(false); // Close modal on success
+            setInquireVisible(false); 
         } else {
             showAlert("Error", "WhatsApp is not installed on this device.");
         }
@@ -500,12 +481,22 @@ ${inqComment}`;
     }
   };
 
-  // --- Data Parsing ---
+  // --- 🟢 ALL HOOKS CALLED BEFORE CONDITIONAL RETURN ---
+
   const latestInspection = useMemo(() => {
     if (!fullData?.inspections && !fullData?.vehicle?.inspections) return null;
     const list = fullData.inspections || fullData.vehicle.inspections || [];
     return list.length > 0 ? list[list.length - 1] : null;
   }, [fullData]);
+
+  const getFieldMedia = (fieldName: string) => {
+    if (!latestInspection?.fields) return null;
+    const field = latestInspection.fields.find((f: any) => f.name.toLowerCase() === fieldName.toLowerCase());
+    if (field && field.files && field.files.length > 0) {
+      return field.files[0];
+    }
+    return null;
+  };
 
   const groupedDamages = useMemo(() => {
     if (!latestInspection?.damages) return {};
@@ -513,9 +504,9 @@ ${inqComment}`;
     latestInspection.damages.forEach((dmg: any) => {
       let category = 'Other';
       const part = (dmg.body_part || '').toLowerCase();
-      if (part.includes('door') || part.includes('fender') || part.includes('panel')) category = 'Doors & Panels';
-      else if (part.includes('glass') || part.includes('shield') || part.includes('light')) category = 'Glass & Lights';
-      else if (part.includes('bumper') || part.includes('hood') || part.includes('trunk')) category = 'Bumpers & Hood';
+      if (part.includes('door') || part.includes('fender') || part.includes('panel') || part.includes('pillar')) category = 'Doors & Panels';
+      else if (part.includes('glass') || part.includes('shield') || part.includes('mirror') || part.includes('light') || part.includes('lamp')) category = 'Glass & Lights';
+      else if (part.includes('bumper') || part.includes('hood') || part.includes('trunk') || part.includes('grille')) category = 'Bumpers & Hood';
       else if (part.includes('wheel') || part.includes('tire') || part.includes('rim')) category = 'Wheels & Tires';
       else if (part.includes('roof')) category = 'Roof';
       if (!groups[category]) groups[category] = [];
@@ -524,71 +515,116 @@ ${inqComment}`;
     return groups;
   }, [latestInspection]);
 
+  // 🟢 Car Detail Items Memo
+  const carDetailItems = useMemo(() => {
+    if (!fullData?.vehicle) return [];
+    const v = fullData.vehicle;
+    const i = latestInspection;
+    const val = (value: any) => (value !== null && value !== undefined && value !== '') ? value : 'N/A';
+
+    return [
+      { label: 'Make', value: v.brand?.name },
+      { label: 'Model', value: v.vehicle_model?.name },
+      { label: 'Trim', value: val(v.trim || i?.trim) },
+      { label: 'Year', value: v.year },
+      { label: 'Odometer Reading (KM/M)', value: `${val(i?.odometer || v.mileage)} KM` },
+      { label: 'Registered Emirates', value: val(i?.registerEmirates || v.register_emirates), media: getFieldMedia('registerEmirates') },
+      { label: 'Engine CC', value: v.engine_cc },
+      { label: 'No. of Cylinders', value: v.no_of_cylinder },
+      { label: 'Horsepower (in BHP)', value: v.horsepower },
+      { label: 'Body Type', value: val(i?.body_type || v.body_type_id === 1 ? 'Sports' : 'Sedan') }, 
+      { label: 'Specs', value: val(v.specs || i?.specs) },
+      { label: 'Transmission Type', value: val(i?.transmission || (v.transmission_id === 1 ? 'Automatic' : 'Manual')) },
+      { label: 'Color', value: val(i?.color || v.color), media: getFieldMedia('color') },
+      { label: 'Service History', value: val(i?.serviceHistory) },
+      { label: 'No. of Keys', value: val(i?.noOfKeys) },
+      { label: 'Warranty Available', value: val(i?.warrantyAvailable) },
+      { label: 'Service Contract Available', value: val(i?.serviceContractAvailable), fullWidth: true },
+    ];
+  }, [fullData, latestInspection]);
+
+  // 🟢 Inspection Sections Memo
+  const inspectionSections = useMemo(() => {
+    if (!latestInspection) return [];
+    
+    const i = latestInspection;
+    const getVal = (key: string) => i[key] || "N/A";
+    const getArr = (key: string) => Array.isArray(i[key]) && i[key].length > 0 ? i[key].join(", ") : "No visible fault";
+    
+    const getColor = (val: string) => {
+        const v = String(val).toLowerCase();
+        if (v.includes('no leak') || v.includes('no visible') || v.includes('available') || v.includes('original') || v.includes('good')) return '#cadb2a';
+        if (v.includes('minor') || v.includes('moderate')) return '#ffaa00';
+        if (v.includes('worn') || v.includes('major') || v.includes('severe') || v.includes('fail')) return '#ff4444';
+        return '#fff'; 
+    };
+
+    return [
+        {
+            title: "Engine & Transmission",
+            rows: [
+                [{ label: "Engine Oil", value: getVal('engineOil') }, { label: "Gear Oil", value: getVal('gearOil') }],
+                [{ label: "Engine Noise", value: getVal('engineNoise') }, { label: "Engine Smoke", value: getVal('engineSmoke') }],
+                [{ label: "Gear Shifting", value: getVal('gearshifting') }, { label: "4WD System", value: getVal('fourWdSystemCondition') }],
+            ],
+            comment: i.remarks || "No remarks."
+        },
+        {
+            title: "Steering, Suspension & Brakes",
+            rows: [
+                [{ label: "Brake Pads", value: getVal('brakePads') }, { label: "Brake Discs", value: getArr('brakeDiscs') }],
+                [{ label: "Suspension", value: getVal('suspension') }, { label: "Shock Absorber", value: getArr('shockAbsorberOperation') }],
+                [{ label: "Steering Operation", value: getVal('steeringOperation') }, { label: "Wheel Alignment", value: getVal('wheelAlignment') }],
+            ],
+            comment: i.comment_section1 || "No remarks."
+        },
+        {
+            title: "Wheel & Tyre",
+            rows: [
+                [{ label: "Spare Tire", value: getVal('spareTire') }, { label: "Front Left Tire", value: getVal('frontLeftTire') }],
+                [{ label: "Front Right Tire", value: getVal('frontRightTire') }, { label: "Rear Left Tire", value: getVal('rearLeftTire') }],
+                [{ label: "Rear Right Tire", value: getVal('rearRightTire') }, { label: "Tire Size", value: getVal('tiresSize') }],
+                [{ label: "Wheels Type", value: getVal('wheelsType') }, { label: "Front Rim Size", value: getVal('rimsSizeFront') }],
+                [{ label: "Rear Rim Size", value: getVal('rimsSizeRear') }, { label: "", value: "" }],
+            ],
+            comment: i.commentTire || "No remarks."
+        },
+        {
+            title: "Interior & Electricals",
+            rows: [
+                [{ label: "Speedometer Cluster", value: getVal('speedmeterCluster') }, { label: "Head Lining", value: getVal('headLining') }],
+                [{ label: "Seat Controls", value: getVal('seatControls') }, { label: "Central Lock", value: getVal('centralLockOperation') }],
+                [{ label: "Windows Control", value: getVal('windowsControl') }, { label: "Cruise Control", value: getVal('cruiseControl') }],
+                [{ label: "Sunroof Condition", value: getVal('sunroofCondition') }, { label: "AC Cooling", value: getVal('acCooling') }],
+                [{ label: "Seats Material", value: getVal('seats') }, { label: "Cooled Seats", value: getVal('cooledSeats') }],
+                [{ label: "Heated Seats", value: getVal('heatedSeats') }, { label: "Power Seats", value: getVal('powerSeats') }],
+            ],
+            comment: i.comment_section2 || "No remarks."
+        },
+        {
+            title: "Car Specs",
+            rows: [
+                [{ label: "Parking Sensors", value: getVal('parkingSensors') }, { label: "Keyless Start", value: getVal('keylessStart') }],
+                [{ label: "360 Camera", value: getVal('viveCamera') }, { label: "Blind Spot Monitor", value: getVal('blindSpot') }],
+                [{ label: "Sunroof Type", value: getVal('sunroofType') }, { label: "Heads-Up Display", value: getVal('headsDisplay') }],
+                [{ label: "Premium Sound System", value: getVal('premiumSound') }, { label: "Carbon Fiber Interior", value: getVal('carbonFiber') }],
+                [{ label: "Side Steps", value: getVal('sideSteps') }, { label: "Convertible Top", value: getVal('convertible') }],
+            ],
+            paintCondition: i.paintCondition || []
+        }
+    ].map(section => ({
+        ...section,
+        rows: section.rows.map(row => row.map(cell => ({ ...cell, color: getColor(cell.value) })))
+    }));
+
+  }, [latestInspection]);
+
+  // 🟢 CONDITIONAL LOADING RETURN (After all hooks)
   if (loading || !fullData?.vehicle) {
     return <View style={styles.loadingContainer}><ActivityIndicator size="large" color="#cadb2a" /></View>;
   }
 
   const vehicle = fullData.vehicle;
-
-  const getCategorizedInspection = (inspection: any) => {
-    if (!inspection) return null;
-    const usedKeys = new Set<string>();
-    const getField = (key: string, label?: string) => {
-      let val = inspection[key];
-      if (val === null || val === undefined) return null;
-      if (typeof val === 'object') {
-        if (val.name) val = val.name;
-        else if (val.value) val = val.value;
-        else return null;
-      }
-      usedKeys.add(key);
-      let media = null;
-      if (inspection.fields) {
-        const fieldObj = inspection.fields.find((f: any) => f.name === key);
-        if (fieldObj && fieldObj.files && fieldObj.files.length > 0) media = fieldObj.files[0];
-      }
-      return { label: label || formatKey(key), value: String(val), media };
-    };
-
-    const categories = {
-      engine: [getField('engineCondition', 'Engine Condition'), getField('engineOil', 'Engine Oil'), getField('transmissionCondition', 'Transmission'), getField('gearOil', 'Gear Oil'), getField('fourWdSystemCondition', '4WD System')].filter((item): item is { label: string, value: any, media: any } => !!item),
-      steering: [getField('steeringOperation', 'Steering'), getField('suspension', 'Suspension'), getField('shockAbsorberOperation', 'Shock Absorbers'), getField('brakePads', 'Brake Pads')].filter((item): item is { label: string, value: any, media: any } => !!item),
-      interior: [getField('acCooling', 'AC Cooling'), getField('seatsCondition', 'Seats'), getField('sunroofCondition', 'Sunroof'), getField('windowsControl', 'Windows'), getField('centralLockOperation', 'Central Lock')].filter((item): item is { label: string, value: any, media: any } => !!item),
-      exterior: [getField('overallCondition', 'Overall'), getField('body_type', 'Body Type'), getField('parkingSensors', 'Parking Sensors')].filter((item): item is { label: string, value: any, media: any } => !!item),
-      wheels: [getField('wheelsType', 'Wheels Type'), getField('tiresSize', 'Tires Size'), getField('rimsSizeFront', 'Front Rims')].filter((item): item is { label: string, value: any, media: any } => !!item),
-    };
-    const ignoredKeys = ['id', 'vehicle_id', 'created_at', 'updated_at', 'file_path', 'damage_file_path', 'images', 'damages', 'fields', 'paintCondition', 'final_conclusion', 'remarks', 'make', 'model', 'vehicle', 'pivot', 'inspector', 'inspector_id', 'inspection_enquiry_id', 'brand', 'vehicle_model'];
-    const otherItems = Object.keys(inspection)
-      .filter(key => !usedKeys.has(key) && !ignoredKeys.includes(key) && inspection[key] !== null && inspection[key] !== '')
-      .map(key => getField(key));
-
-    // @ts-ignore
-    categories.other = otherItems.filter(item => !!item);
-    return categories;
-  };
-  const categorizedData = getCategorizedInspection(latestInspection);
-
-  const renderInspectionRow = (item: any, idx: number) => (
-    <View key={idx} style={styles.inspectionRow}>
-      <Text style={styles.inspLabel}>{item.label}</Text>
-      <View style={styles.inspValueContainer}>
-        <Text style={styles.inspValue}>{item.value}</Text>
-        {item.media && (
-          <TouchableOpacity
-            onPress={() => {
-              const path = item.media.path.startsWith('http') ? item.media.path : `${STORAGE_BASE_URL}${item.media.path}`;
-              if (item.media.file_type === 'video') handleVideoOpen(path);
-              else handleImageOpen([path], 0, false); // Handle single image
-            }}
-            style={styles.mediaBtnRight}
-          >
-            <FontAwesome5 name="eye" size={16} color="#cadb2a" />
-          </TouchableOpacity>
-        )}
-      </View>
-    </View>
-  );
-
   const offerPrice = Number(vehicle.price || vehicle.starting_bid_amount || 0);
 
   const imageList = vehicle.images?.map((img: any) => img.path) || [];
@@ -598,68 +634,9 @@ ${inqComment}`;
     imageList.push(vehicle.brand.image_source);
   }
 
-  const exteriorFeatures = fullData?.exterior_features || [];
-  const interiorFeatures = fullData?.interior_features || [];
-  const allFeaturesCombined = [...exteriorFeatures, ...interiorFeatures];
-  const displayedFeatures = showAllFeatures ? allFeaturesCombined : allFeaturesCombined.slice(0, 10);
-  const dynamicTabs = ['Overview', 'Details'];
-  if (allFeaturesCombined.length > 0) dynamicTabs.push('Features');
+  const dynamicTabs = ['Car Details'];
   if (latestInspection) dynamicTabs.push('Inspection');
   dynamicTabs.push('Remarks');
-
-  const detailItems = [
-    { label: 'VIN', val: vehicle.vin },
-    { label: 'Engine Type', val: vehicle.engine_type },
-    { label: 'Engine CC', val: vehicle.engine_cc ? `${vehicle.engine_cc} cc` : null },
-    { label: 'Horsepower', val: vehicle.horsepower },
-    { label: 'Torque', val: vehicle.torque },
-    { label: 'Cylinders', val: vehicle.no_of_cylinder },
-    { label: 'Drive Type', val: vehicle.drive_type },
-    { label: 'Fuel Type', val: vehicle.fuel_type_id === 1 ? 'Petrol' : (vehicle.fuel_type_id === 2 ? 'Diesel' : null) },
-    { label: 'Transmission', val: vehicle.transmission_id === 1 ? 'Automatic' : (vehicle.transmission_id === 2 ? 'Manual' : null) },
-    { label: 'Body Type', val: vehicle.body_type_id },
-    { label: 'Color', val: vehicle.color },
-    { label: 'Interior', val: vehicle.interior_color },
-    { label: 'Mileage', val: vehicle.mileage ? `${vehicle.mileage} km` : null },
-    { label: 'Condition', val: vehicle.condition },
-  ].filter(item => item.val !== null && item.val !== undefined && item.val !== '');
-
-  const renderStatusCard = () => {
-    if (bookingStatus !== 'none') {
-      const statusColor = bookingStatus === 'pending_payment' ? '#ffaa00' : (bookingStatus === 'intransfer' ? '#00a8ff' : '#cadb2a');
-      const statusIcon = bookingStatus === 'pending_payment' ? 'clock' : (bookingStatus === 'intransfer' ? 'truck' : 'check-circle');
-      const statusIconComponent = <Feather name={statusIcon} size={40} color={statusColor} style={{ marginBottom: 10 }} />;
-
-      if (bookingStatus === 'pending_payment') {
-        return (
-          <View style={styles.statusCard}>
-            {statusIconComponent}
-            <Text style={styles.statusTitle}>Payment Pending</Text>
-            <Text style={styles.statusSubText}>Complete payment to confirm your booking.</Text>
-          </View>
-        );
-      }
-      if (bookingStatus === 'intransfer') {
-        return (
-          <View style={styles.statusCard}>
-            {statusIconComponent}
-            <Text style={styles.statusTitle}>Vehicle In-Transfer</Text>
-            <Text style={styles.statusSubText}>Your vehicle is currently being transferred. Tracking info will be updated soon.</Text>
-          </View>
-        );
-      }
-      if (bookingStatus === 'delivered') {
-        return (
-          <View style={styles.statusCard}>
-            {statusIconComponent}
-            <Text style={styles.statusTitle}>Vehicle Delivered</Text>
-            <Text style={styles.statusSubText}>Your vehicle has been successfully delivered. Enjoy your ride!</Text>
-          </View>
-        );
-      }
-    }
-    return null;
-  };
 
   return (
     <View style={styles.container}>
@@ -682,7 +659,7 @@ ${inqComment}`;
           showsVerticalScrollIndicator={false}
         >
 
-          {/* Index 0: Top Wrapper (Banner, Desc, Status Card) */}
+          {/* Index 0: Top Wrapper */}
           <View>
             {/* BANNER SLIDER WITH OVERLAY */}
             <View style={{ height: 250, marginBottom: 15 }}>
@@ -734,7 +711,23 @@ ${inqComment}`;
               </View>
             )}
 
-            {renderStatusCard()}
+            {/* Status Card */}
+            {bookingStatus !== 'none' && (
+                <View style={styles.statusCard}>
+                    <Feather 
+                        name={bookingStatus === 'pending_payment' ? 'clock' : (bookingStatus === 'intransfer' ? 'truck' : 'check-circle')} 
+                        size={40} 
+                        color={bookingStatus === 'pending_payment' ? '#ffaa00' : (bookingStatus === 'intransfer' ? '#00a8ff' : '#cadb2a')} 
+                        style={{ marginBottom: 10 }} 
+                    />
+                    <Text style={styles.statusTitle}>
+                        {bookingStatus === 'pending_payment' ? 'Payment Pending' : (bookingStatus === 'intransfer' ? 'Vehicle In-Transfer' : 'Vehicle Delivered')}
+                    </Text>
+                    <Text style={styles.statusSubText}>
+                        {bookingStatus === 'pending_payment' ? 'Complete payment to confirm your booking.' : (bookingStatus === 'intransfer' ? 'Your vehicle is currently being transferred.' : 'Your vehicle has been successfully delivered.')}
+                    </Text>
+                </View>
+            )}
           </View>
 
           {/* Index 1: Sticky Tabs */}
@@ -753,117 +746,64 @@ ${inqComment}`;
           </View>
 
           {/* Index 2+: Sections */}
-          <View onLayout={(e) => handleLayout(e, 'Overview')} style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>Overview</Text>
-            <View style={styles.specCardsGrid}>
-              <SpecCard icon="car-shift-pattern" title="Trans." sub={vehicle.transmission_id === 1 ? 'Auto' : 'Manual'} />
-              <SpecCard icon="car-door" title="Seats" sub={`${vehicle.doors || 'N/A'} Dr, ${vehicle.seats || 'N/A'} St`} />
-              <SpecCard icon="fan" title="A/C" sub="Climate Ctrl" />
-              <SpecCard icon="gas-station" title="Fuel" sub={vehicle.fuel_type_id === 1 ? 'Petrol' : (vehicle.fuel_type_id === 2 ? 'Diesel' : 'N/A')} />
-            </View>
-          </View>
 
-          <View onLayout={(e) => handleLayout(e, 'Details')} style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>Vehicle Details</Text>
-            <View style={styles.detailsListContainer}>
-              {detailItems.slice(0, showAllDetails ? undefined : 8).map((item, idx) => {
-                const isLast = idx === (showAllDetails ? detailItems.length : 8) - 1;
-                return (
-                  <View key={idx} style={[styles.detailListRow, isLast && { borderBottomWidth: 0 }]}>
-                    <Text style={styles.detailListLabel}>{item.label}</Text>
-                    <Text style={styles.detailListValue}>{item.val}</Text>
+          {/* 🟢 Car Details Section (Renamed & Grid) */}
+          <View onLayout={(e) => handleLayout(e, 'Car Details')} style={styles.sectionContainer}>
+            <Text style={styles.sectionTitle}>Car Details</Text>
+            
+            <View style={styles.carDetailsGrid}>
+              {carDetailItems.map((item, idx) => (
+                <View key={idx} style={[styles.carDetailItem, item.fullWidth && { width: '100%' }]}>
+                  <Text style={styles.carDetailLabel}>{item.label}</Text>
+                  <View style={styles.carDetailValueRow}>
+                    <Text style={styles.carDetailValue}>{item.value || 'N/A'}</Text>
+                    
+                    {item.media && (
+                      <TouchableOpacity
+                        onPress={() => {
+                          const path = item.media.path.startsWith('http') ? item.media.path : `${STORAGE_BASE_URL}${item.media.path}`;
+                          if (item.media.file_type === 'video') handleVideoOpen(path);
+                          else handleImageOpen([path], 0, false); 
+                        }}
+                        style={{ marginLeft: 8 }}
+                      >
+                         <Feather name="camera" size={16} color="#00a8ff" />
+                      </TouchableOpacity>
+                    )}
                   </View>
-                );
-              })}
-            </View>
-            {detailItems.length > 8 && (
-              <TouchableOpacity style={styles.showMoreBtn} onPress={() => setShowAllDetails(!showAllDetails)}>
-                <Text style={styles.showMoreText}>{showAllDetails ? 'Show Less' : 'Show More ...'}</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {allFeaturesCombined.length > 0 && (
-            <View onLayout={(e) => handleLayout(e, 'Features')} style={styles.sectionContainer}>
-              <View style={styles.featureHeader}>
-                <Text style={styles.sectionTitle}>Features</Text>
-                <View style={styles.badgeIcon}><Text style={{ color: '#000', fontSize: 10, fontWeight: 'bold' }}>PRO</Text></View>
-              </View>
-              {displayedFeatures.map((f: any, idx: number) => (
-                <View key={idx} style={styles.featureRow}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                    <View style={styles.bullet} />
-                    <Text style={styles.featureText}>{f.name}</Text>
-                  </View>
-                  <Feather name="check-circle" size={18} color="#cadb2a" />
                 </View>
               ))}
-              {allFeaturesCombined.length > 10 && (
-                <TouchableOpacity style={styles.showMoreBtn} onPress={() => setShowAllFeatures(!showAllFeatures)}>
-                  <Text style={styles.showMoreText}>{showAllFeatures ? 'Show Less' : 'Show More ...'}</Text>
-                </TouchableOpacity>
-              )}
             </View>
-          )}
+          </View>
 
-          {latestInspection && (
-            <View onLayout={(e) => handleLayout(e, 'Inspection')} style={styles.sectionContainer}>
-              <Text style={styles.sectionTitle}>Inspection Report</Text>
-
-              <InspectionAccordion title="Engine & Transmission" isOpen={activeAccordion === 'Engine'} onPress={() => setActiveAccordion(activeAccordion === 'Engine' ? null : 'Engine')}>
-                {categorizedData.engine.length > 0 ? categorizedData.engine.map(renderInspectionRow) : <Text style={{ color: '#666' }}>No data.</Text>}
-              </InspectionAccordion>
-              <InspectionAccordion title="Steering & Suspension" isOpen={activeAccordion === 'Steering'} onPress={() => setActiveAccordion(activeAccordion === 'Steering' ? null : 'Steering')}>
-                {categorizedData.steering.length > 0 ? categorizedData.steering.map(renderInspectionRow) : <Text style={{ color: '#666' }}>No data.</Text>}
-              </InspectionAccordion>
-              <InspectionAccordion title="Interior & Electrical" isOpen={activeAccordion === 'Interior'} onPress={() => setActiveAccordion(activeAccordion === 'Interior' ? null : 'Interior')}>
-                {categorizedData.interior.length > 0 ? categorizedData.interior.map(renderInspectionRow) : <Text style={{ color: '#666' }}>No data.</Text>}
-              </InspectionAccordion>
-              <InspectionAccordion title="Exterior" isOpen={activeAccordion === 'Exterior'} onPress={() => setActiveAccordion(activeAccordion === 'Exterior' ? null : 'Exterior')}>
-                {categorizedData.exterior.length > 0 ? categorizedData.exterior.map(renderInspectionRow) : <Text style={{ color: '#666' }}>No data.</Text>}
-              </InspectionAccordion>
-              <InspectionAccordion title="Wheels & Tires" isOpen={activeAccordion === 'Wheels'} onPress={() => setActiveAccordion(activeAccordion === 'Wheels' ? null : 'Wheels')}>
-                {categorizedData.wheels.length > 0 ? categorizedData.wheels.map(renderInspectionRow) : <Text style={{ color: '#666' }}>No data.</Text>}
-              </InspectionAccordion>
-
-              {/* @ts-ignore */}
-              {categorizedData.other && categorizedData.other.length > 0 && (
-                <InspectionAccordion title="Other Information" isOpen={activeAccordion === 'Other'} onPress={() => setActiveAccordion(activeAccordion === 'Other' ? null : 'Other')}>
-                  {/* @ts-ignore */}
-                  {categorizedData.other.map(renderInspectionRow)}
-                </InspectionAccordion>
-              )}
-
-              {latestInspection.final_conclusion ? (
-                <View style={[styles.commentContainer, { borderTopWidth: 1, borderTopColor: '#333', paddingTop: 10 }]}>
-                  <Text style={[styles.subSectionTitle, { color: '#cadb2a' }]}>Final Conclusion</Text>
-                  <Text style={[styles.descriptionText, { fontWeight: 'bold' }]}>{latestInspection.final_conclusion}</Text>
+          {/* 🟢 Damage Map Section (With Toggle) */}
+          {latestInspection?.damage_file_path && (
+            <View style={styles.sectionContainer}>
+               <View style={styles.featureHeader}>
+                <View>
+                   <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>Damage Assessment</Text>
+                   <Text style={{color: '#888', fontSize: 12}}>({latestInspection.damages?.length || 0} Points)</Text>
                 </View>
-              ) : null}
+                
+                {/* Checkbox Toggle */}
+                <TouchableOpacity 
+                   style={{flexDirection: 'row', alignItems: 'center'}} 
+                   onPress={() => setShowFaultsList(!showFaultsList)}
+                >
+                   <Feather name={showFaultsList ? "check-square" : "square"} size={18} color="#cadb2a" />
+                   <Text style={{color: '#ccc', marginLeft: 8, fontSize: 12, fontFamily: 'Poppins'}}>View Faults List</Text>
+                </TouchableOpacity>
+              </View>
+              
+              <Text style={{color:'#666', fontSize:11, marginBottom: 10}}>Interactive damage visualization</Text>
 
-              {latestInspection.damage_file_path && (
-                <View style={{ marginTop: 20 }}>
-                  <TouchableOpacity onPress={() => handleImageOpen([latestInspection.damage_file_path], 0, true)} style={styles.damageMapContainer}>
-                    <Image source={{ uri: latestInspection.damage_file_path }} style={styles.damageMapImage} resizeMode="cover" />
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {latestInspection.paintCondition && latestInspection.paintCondition.length > 0 && (
-                <View style={styles.infoBlock}>
-                  <Text style={styles.subSectionTitle}>Paint Condition</Text>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5 }}>
-                    {latestInspection.paintCondition.map((pc: string, i: number) => {
-                      const { backgroundColor, label } = getPaintBadgeColor(pc);
-                      return <View key={i} style={[styles.tag, { backgroundColor }]}><Text style={[styles.tagText, { color: '#fff', fontWeight: 'bold' }]}>{label}</Text></View>;
-                    })}
-                  </View>
-                </View>
-              )}
-
-              {latestInspection.damages && latestInspection.damages.length > 0 && (
-                <View style={{ marginTop: 20 }}>
-                  <Text style={[styles.sectionTitle, { fontSize: 14, color: '#ff5555', marginBottom: 10 }]}>Reported Damages</Text>
+              <TouchableOpacity onPress={() => handleImageOpen([latestInspection.damage_file_path], 0, true)} style={styles.damageMapContainer}>
+                <Image source={{ uri: latestInspection.damage_file_path }} style={styles.damageMapImage} resizeMode="contain" />
+              </TouchableOpacity>
+              
+              {/* Conditional List based on Checkbox */}
+              {showFaultsList && latestInspection.damages && latestInspection.damages.length > 0 && (
+                <View style={{ marginTop: 15 }}>
                   {Object.entries(groupedDamages).map(([cat, items]) => {
                     const isExpanded = expandedDamageCategories[cat];
                     const displayedItems = isExpanded ? items : items.slice(0, 4);
@@ -896,57 +836,81 @@ ${inqComment}`;
                   })}
                 </View>
               )}
+            </View>
+          )}
 
-              {/* INSPECTION SLIDER */}
-              {latestInspection.images && latestInspection.images.length > 0 && (
-                <View style={{ marginTop: 20 }}>
-                  <Text style={[styles.sectionTitle, { paddingHorizontal: 0 }]}>Inspection Gallery</Text>
-                  <View style={{ height: 250, width: width, marginLeft: -16 }}>
-                    <ScrollView
-                      horizontal
-                      pagingEnabled
-                      showsHorizontalScrollIndicator={false}
-                      onMomentumScrollEnd={(e) => {
-                        const idx = Math.round(e.nativeEvent.contentOffset.x / width);
-                        setActiveInspectionIndex(idx);
-                      }}
-                    >
-                      {latestInspection.images.map((img: any, idx: number) => {
-                        const uri = img.path.startsWith('http') ? img.path : `${STORAGE_BASE_URL}${img.path}`;
-                        return (
-                          <TouchableOpacity
-                            key={idx}
-                            onPress={() => {
-                                const inspectionUrls = latestInspection.images.map((im: any) => 
-                                    im.path.startsWith('http') ? im.path : `${STORAGE_BASE_URL}${im.path}`
-                                );
-                                handleImageOpen(inspectionUrls, idx, false);
-                            }}
-                            activeOpacity={0.9}
-                          >
-                            <Image source={{ uri }} style={{ width: width, height: 250, resizeMode: 'cover' }} />
-                          </TouchableOpacity>
-                        )
-                      })}
-                    </ScrollView>
-                    <View style={styles.paginationContainer}>
-                      {latestInspection.images.map((_: any, i: number) => (
-                        <View key={i} style={[styles.dot, i === activeInspectionIndex && styles.activeDot]} />
-                      ))}
+          {latestInspection && (
+            <View onLayout={(e) => handleLayout(e, 'Inspection')} style={styles.sectionContainer}>
+              {/* 🟢 Inspection Report Accordions (New Layout) */}
+              {inspectionSections.map((section, index) => (
+                <InspectionAccordion 
+                    key={index} 
+                    title={section.title} 
+                    isOpen={activeAccordion === section.title} 
+                    onPress={() => setActiveAccordion(activeAccordion === section.title ? null : section.title)}
+                >
+                    {section.rows.map((row, rIdx) => (
+                        <View key={rIdx} style={styles.inspGridRow}>
+                            {row.map((cell, cIdx) => (
+                                <View key={cIdx} style={styles.inspGridItem}>
+                                    <Text style={styles.inspLabel}>{cell.label}</Text>
+                                    <Text style={[styles.inspValue, { color: cell.color }]}>{cell.value}</Text>
+                                </View>
+                            ))}
+                        </View>
+                    ))}
+                    
+                    {/* Paint Condition for Car Specs */}
+                    {/* @ts-ignore */}
+                    {section.paintCondition && section.paintCondition.length > 0 && (
+                        <View style={{ marginTop: 10 }}>
+                             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
+                                <Text style={styles.inspLabel}>Paint Condition</Text>
+                             </View>
+                             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5 }}>
+                                {/* @ts-ignore */}
+                                {section.paintCondition.map((pc: string, i: number) => {
+                                    const { backgroundColor, label } = getPaintBadgeColor(pc);
+                                    return <View key={i} style={[styles.tag, { backgroundColor }]}><Text style={[styles.tagText, { color: '#fff', fontWeight: 'bold' }]}>{label}</Text></View>;
+                                })}
+                             </View>
+                        </View>
+                    )}
+
+                    {section.comment && (
+                        <View style={styles.inspCommentBox}>
+                            <Text style={styles.inspCommentLabel}>Comments:</Text>
+                            <Text style={styles.inspCommentText}>{section.comment}</Text>
+                        </View>
+                    )}
+                </InspectionAccordion>
+              ))}
+
+              {/* 🟢 Final Conclusion (Improved Styling) */}
+              {latestInspection.final_conclusion ? (
+                <View style={styles.finalConclusionContainer}>
+                    <View style={styles.finalConclusionHeader}>
+                        <MaterialCommunityIcons name="clipboard-check-outline" size={20} color="#000" />
+                        <Text style={styles.finalConclusionTitle}>FINAL CONCLUSION</Text>
                     </View>
-                  </View>
+                    <Text style={styles.finalConclusionText}>{latestInspection.final_conclusion}</Text>
                 </View>
-              )}
+              ) : null}
 
             </View>
           )}
 
+          {/* 🟢 Remarks Section (Renamed & Styled) */}
           <View onLayout={(e) => handleLayout(e, 'Remarks')} style={styles.sectionContainer}>
-            <View style={styles.commentBox}>
-              <Text style={styles.featureText}>Comments & Remarks</Text>
-              <Feather name="message-square" size={20} color="#cadb2a" />
+            <View style={styles.sectionHeaderRow}>
+                 <View style={styles.sectionIconBadge}>
+                    <Feather name="message-square" size={16} color="#000" />
+                 </View>
+                 <Text style={styles.sectionTitleNew}>Remarks</Text>
             </View>
-            <Text style={[styles.descriptionText, { marginTop: 10 }]}>{vehicle.remarks || "No remarks."}</Text>
+            <View style={styles.remarksContainer}>
+                <Text style={styles.remarksText}>{vehicle.remarks || "No remarks."}</Text>
+            </View>
           </View>
 
           <View style={{ height: 100 }} />
@@ -979,7 +943,7 @@ ${inqComment}`;
           </View>
         )}
 
-        {/* 🟢 UPDATED: Gallery Modal (Sliding) */}
+        {/* Gallery Modal */}
         <ImagePreviewModal
           visible={!!previewImages.length}
           images={previewImages}
@@ -1047,7 +1011,7 @@ ${inqComment}`;
           </View>
         </Modal>
 
-        {/* 🟢 ADD: Login Alert for guests */}
+        {/* Login Alerts */}
         <CustomAlert
           visible={showLoginAlert}
           title="Please Login"
@@ -1055,7 +1019,6 @@ ${inqComment}`;
           onClose={() => setShowLoginAlert(false)}
         />
 
-        {/* 🟢 ADD: Approval Alert for unapproved users */}
         <CustomAlert
           visible={showApprovalAlert}
           title="Account Pending Approval"
@@ -1085,7 +1048,7 @@ const styles = StyleSheet.create({
   bannerPriceValue: { color: '#fff', fontSize: 16, fontWeight: 'bold', fontFamily: 'Lato' },
   bannerDivider: { width: 1, height: 30, backgroundColor: 'rgba(255,255,255,0.3)', marginHorizontal: 15 },
   
-  // 🟢 Preview Styles (Copied from Auction Screen)
+  // Preview
   previewContainer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center' },
   previewContainerWhite: { backgroundColor: '#fff' },
   previewCloseBtn: { position: 'absolute', top: 50, right: 30, zIndex: 20, padding: 8, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20 },
@@ -1109,47 +1072,55 @@ const styles = StyleSheet.create({
   subSectionTitle: { color: '#aaa', fontSize: 13, fontWeight: '600', fontFamily: 'Poppins', marginBottom: 8, marginTop: 5 },
   descriptionText: { color: '#ccc', fontSize: 14, fontFamily: 'Poppins', lineHeight: 20 },
 
-  // Specs & Details
-  specCardsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  specCard: { width: '48%', backgroundColor: '#111', borderRadius: 12, padding: 16, marginBottom: 0, borderWidth: 1, borderColor: '#222' },
-  specTitle: { color: '#fff', fontSize: 14, fontWeight: 'bold', fontFamily: 'Poppins' },
-  specSub: { color: '#888', fontSize: 12, marginTop: 4, fontFamily: 'Poppins' },
-  detailsListContainer: { backgroundColor: '#111', borderRadius: 12, paddingHorizontal: 16, borderWidth: 1, borderColor: '#222' },
-  detailListRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#222', alignItems: 'center' },
-  detailListLabel: { color: '#888', fontFamily: 'Poppins', fontSize: 14 },
-  detailListValue: { color: '#fff', fontFamily: 'Poppins', fontWeight: '600', fontSize: 14, textAlign: 'right', flex: 1, marginLeft: 20 },
-  showMoreBtn: { alignItems: 'center', marginTop: 15 },
-  showMoreText: { color: '#888', fontSize: 14, fontFamily: 'Poppins' },
+  // 🟢 Car Details Grid Styles
+  carDetailsGrid: { flexDirection: 'row', flexWrap: 'wrap', backgroundColor: '#111', borderRadius: 12, borderWidth: 1, borderColor: '#222', padding: 8 },
+  carDetailItem: { width: '50%', padding: 12, borderBottomWidth: 1, borderBottomColor: '#222' },
+  carDetailLabel: { color: '#888', fontSize: 12, fontFamily: 'Poppins', marginBottom: 4 },
+  carDetailValueRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start' },
+  carDetailValue: { color: '#fff', fontSize: 14, fontWeight: '600', fontFamily: 'Poppins' },
 
-  // Features
+  // 🟢 Inspection Grid Styles
+  inspGridRow: { flexDirection: 'row', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: '#222', paddingVertical: 8 },
+  inspGridItem: { width: '50%', paddingRight: 5 },
+  inspLabel: { color: '#888', fontSize: 12, fontFamily: 'Poppins', marginBottom: 2 },
+  inspValue: { fontSize: 14, fontWeight: 'bold', fontFamily: 'Poppins' },
+  inspCommentBox: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#222' },
+  inspCommentLabel: { color: '#888', fontSize: 12, marginBottom: 4 },
+  inspCommentText: { color: '#ccc', fontSize: 12, fontStyle: 'italic' },
+
+  // Map
+  damageMapContainer: { backgroundColor: '#fff', borderRadius: 12, padding: 10, marginBottom: 15 },
+  damageMapImage: { width: '100%', height: 200 },
   featureHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  badgeIcon: { backgroundColor: '#cadb2a', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
-  featureRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#222' },
-  bullet: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#cadb2a', marginRight: 15 },
-  featureText: { color: '#fff', fontSize: 14, fontFamily: 'Poppins', flex: 1 },
-
-  // Inspection
-  inspectionRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8, borderBottomWidth: 1, borderBottomColor: '#222', paddingBottom: 8 },
-  inspLabel: { color: '#888', fontSize: 12, fontFamily: 'Poppins', flex: 1, marginRight: 10 },
-  inspValueContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', flex: 1 },
-  inspValue: { color: '#cadb2a', fontSize: 14, fontWeight: 'bold', fontFamily: 'Poppins', textAlign: 'right' },
-  mediaBtnRight: { marginLeft: 12, padding: 4 },
+  
+  // Accordion
   accordionContainer: { marginBottom: 10, backgroundColor: '#111', borderRadius: 10, overflow: 'hidden', borderWidth: 1, borderColor: '#222' },
   accordionHeader: { flexDirection: 'row', justifyContent: 'space-between', padding: 15, alignItems: 'center', backgroundColor: '#1a1a1a' },
   accordionTitle: { color: '#fff', fontSize: 14, fontWeight: 'bold', fontFamily: 'Poppins' },
   accordionContent: { padding: 15, backgroundColor: '#000' },
-  commentContainer: { marginBottom: 15, paddingHorizontal: 5, marginTop: 20 },
-  damageMapContainer: { backgroundColor: '#fff', borderRadius: 12, padding: 10, marginBottom: 15 },
-  damageMapImage: { width: '100%', height: 200 },
-  infoBlock: { marginBottom: 15, marginTop: 15 },
-  tag: { borderRadius: 4, paddingHorizontal: 8, paddingVertical: 4, marginRight: 5, marginBottom: 5 },
-  tagText: { fontSize: 12, fontFamily: 'Poppins' },
+  
+  // Damages
   damagesGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
   damageGridItem: { width: '48%', backgroundColor: '#181818', borderRadius: 8, padding: 10, marginBottom: 10, alignItems: 'center', borderWidth: 1, borderColor: '#333' },
   damageBadge: { borderRadius: 4, paddingVertical: 3, paddingHorizontal: 6, flexDirection: 'row', alignItems: 'center', marginBottom: 6, width: '100%', justifyContent: 'center' },
   damageText: { color: '#fff', fontSize: 10, fontWeight: 'bold', marginLeft: 4, textAlign: 'center' },
   damageBodyPart: { color: '#fff', fontSize: 12, fontWeight: '600', textAlign: 'center', marginBottom: 2 },
   damageSubText: { color: '#ccc', fontSize: 10, textAlign: 'center', marginTop: 2 },
+  showMoreBtn: { alignItems: 'center', marginTop: 15 },
+  showMoreText: { color: '#888', fontSize: 14, fontFamily: 'Poppins' },
+
+  // 🟢 Final Conclusion Styles
+  finalConclusionContainer: { backgroundColor: '#111', borderLeftWidth: 4, borderLeftColor: '#cadb2a', padding: 16, borderRadius: 8, marginTop: 20, borderWidth: 1, borderColor: '#333' },
+  finalConclusionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, backgroundColor: '#cadb2a', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4, alignSelf: 'flex-start' },
+  finalConclusionTitle: { color: '#000', fontSize: 12, fontWeight: 'bold', fontFamily: 'Poppins', marginLeft: 6, textTransform: 'uppercase' },
+  finalConclusionText: { color: '#fff', fontSize: 14, lineHeight: 22, fontFamily: 'Poppins' },
+
+  // 🟢 Remarks Styles
+  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  sectionIconBadge: { backgroundColor: '#cadb2a', width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginRight: 10 },
+  sectionTitleNew: { color: '#fff', fontSize: 18, fontWeight: 'bold', fontFamily: 'Poppins' },
+  remarksContainer: { backgroundColor: '#111', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#333' },
+  remarksText: { color: '#ccc', fontSize: 14, lineHeight: 20, fontFamily: 'Poppins' },
 
   // Status & Footer
   statusCard: { backgroundColor: '#111', marginHorizontal: 16, marginBottom: 20, borderRadius: 12, padding: 20, alignItems: 'center', borderWidth: 1, borderColor: '#333' },
@@ -1163,6 +1134,9 @@ const styles = StyleSheet.create({
   adminFeeText: { color: '#888', fontSize: 10, marginTop: 12, fontFamily: 'Poppins' },
   adminFeeBold: { color: '#fff', fontWeight: 'bold' },
   commentBox: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: '#111', padding: 16, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: '#222' },
+  commentContainer: {marginTop: 10},
+  tag: { borderRadius: 4, paddingHorizontal: 8, paddingVertical: 4, marginRight: 5, marginBottom: 5 },
+  tagText: { fontSize: 12, fontFamily: 'Poppins' },
 
   // Modal
   videoModalContainer: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },

@@ -1,13 +1,55 @@
 import { Feather } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import type { NotificationItem, RootStackParamList } from '../navigation/AppNavigator';
+import ApiService from '../services/ApiService';
 
 const NotificationsScreen = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<RootStackParamList, 'Notifications'>>();
-  const notifications: NotificationItem[] = route.params?.notifications ?? [];
+  const[notifications, setNotifications] = React.useState<NotificationItem[]>(route.params?.notifications ??[]);
+
+  const handleNotificationPress = async (item: NotificationItem) => {
+    // 1. Mark as read visually & API call
+    if (!item.isRead) {
+        setNotifications(prev => prev.map(n => n.id === item.id ? { ...n, isRead: true } : n));
+        try {
+            await ApiService.markNotificationAsRead(item.id);
+        } catch (error) {
+            console.log("Error marking read", error);
+        }
+    }
+
+    // 2. Navigation Logic based on payload
+    if (item.data) {
+        const { vehicle_id, bid_id, invoice_id, type } = item.data;
+
+        // Navigate to Auction/Vehicle Detail
+        if (vehicle_id) {
+            // 🟢 UPDATED LOGIC: If bid_approved, open in negotiation view
+            if (type === 'bid_approved') {
+                 console.log("Navigating to LiveAuction (Negotiation)", vehicle_id);
+                 navigation.navigate('LiveAuction', { carId: Number(vehicle_id), viewType: 'negotiation' });
+            } 
+            // If other bid related -> LiveAuction
+            else if (bid_id || type === 'outbid' || type === 'bid_placed') {
+                 console.log("Navigating to LiveAuction", vehicle_id);
+                 navigation.navigate('LiveAuction', { carId: Number(vehicle_id) });
+            } 
+            // Default -> CarDetailPage
+            else {
+                 console.log("Navigating to CarDetailPage", vehicle_id);
+                 navigation.navigate('CarDetailPage', { carId: Number(vehicle_id) });
+            }
+        } 
+        else if (invoice_id) {
+             console.log("Navigate to Invoice", invoice_id);
+             // navigation.navigate('InvoiceDetail', { invoiceId: invoice_id }); 
+        }
+    }
+  };
 
   const unreadNotifications = notifications.filter(item => !item.isRead);
   const readNotifications = notifications.filter(item => item.isRead);
@@ -31,7 +73,12 @@ const NotificationsScreen = () => {
           <Text style={styles.sectionTitle}>Unread</Text>
         )}
         {unreadNotifications.map(item => (
-          <View key={item.id} style={[styles.card, styles.unreadCard]}>
+          <TouchableOpacity 
+            key={item.id} 
+            style={[styles.card, styles.unreadCard]}
+            activeOpacity={0.7}
+            onPress={() => handleNotificationPress(item)}
+          >
             <View style={styles.cardHeader}>
               <View style={styles.titleRow}>
                 <View style={styles.unreadDot} />
@@ -40,20 +87,25 @@ const NotificationsScreen = () => {
               <Text style={styles.time}>{item.time}</Text>
             </View>
             <Text style={styles.message}>{item.message}</Text>
-          </View>
+          </TouchableOpacity>
         ))}
 
         {readNotifications.length > 0 && (
           <Text style={styles.sectionTitle}>Read</Text>
         )}
         {readNotifications.map(item => (
-          <View key={item.id} style={[styles.card, styles.readCard]}>
+          <TouchableOpacity 
+            key={item.id} 
+            style={[styles.card, styles.readCard]}
+            activeOpacity={0.7}
+            onPress={() => handleNotificationPress(item)}
+          >
             <View style={styles.cardHeader}>
               <Text style={styles.title} numberOfLines={1}>{item.title}</Text>
               <Text style={styles.time}>{item.time}</Text>
             </View>
             <Text style={styles.message}>{item.message}</Text>
-          </View>
+          </TouchableOpacity>
         ))}
 
         {notifications.length === 0 && (

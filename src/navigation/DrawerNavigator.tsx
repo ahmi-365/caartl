@@ -26,7 +26,7 @@ const CustomDrawerContent = (props: DrawerContentComponentProps) => {
     // - public: false = requires login
     // - allowUnapproved: true = unapproved users can access (e.g., Payment Receipts)
     const drawerItems = [
-        { label: 'Home', icon: 'home', screen: 'ListedVehicles', type: 'Feather', public: true, allowUnapproved: true },
+        { label: 'Buy', icon: 'shopping-bag', screen: 'ListedVehicles', type: 'Feather', public: true, allowUnapproved: true },
         { label: 'My Bids', icon: 'gavel', screen: 'MyBiddings', type: 'MaterialCommunityIcons', public: false, allowUnapproved: false },
         { label: 'Favorites', icon: 'heart', screen: 'FavoritesScreen', type: 'Feather', public: false, allowUnapproved: false },
         { label: 'Payment Receipts', icon: 'file-text', screen: 'Payments', type: 'Feather', public: false, allowUnapproved: true }, // 🟢 Unapproved can access
@@ -52,7 +52,8 @@ const CustomDrawerContent = (props: DrawerContentComponentProps) => {
     const handleAuthAction = () => {
         if (isGuest) {
             // @ts-ignore
-            navigation.navigate('Login');
+            logout();
+            // navigation.navigate('Login');
         } else {
             logout();
         }
