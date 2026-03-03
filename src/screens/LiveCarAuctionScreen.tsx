@@ -29,6 +29,8 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withTiming,
+  withSequence, // 🟢 Added for Toast animation
+  withDelay,    // 🟢 Added for Toast animation
 } from "react-native-reanimated";
 
 import CustomAlert from '../components/ui/CustomAlert';
@@ -169,9 +171,9 @@ const ImagePreviewModal = ({ visible, images = [], initialIndex = 0, onClose, is
     <Modal visible={visible} transparent={true} onRequestClose={onClose} animationType="fade">
       <GestureHandlerRootView style={{ flex: 1 }}>
         <View style={[styles.previewContainer, isWhiteBackground && styles.previewContainerWhite]}>
-          <TouchableOpacity 
-            style={styles.previewCloseBtn} 
-            onPress={onClose} 
+          <TouchableOpacity
+            style={styles.previewCloseBtn}
+            onPress={onClose}
             hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
             zIndex={20}
           >
@@ -184,16 +186,16 @@ const ImagePreviewModal = ({ visible, images = [], initialIndex = 0, onClose, is
             horizontal
             pagingEnabled
             showsHorizontalScrollIndicator={false}
-            scrollEnabled={scrollEnabled} 
+            scrollEnabled={scrollEnabled}
             keyExtractor={(_, index) => index.toString()}
             onMomentumScrollEnd={onScroll}
             getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
             initialScrollIndex={initialIndex}
-            waitFor={scrollEnabled ? undefined : undefined} 
+            waitFor={scrollEnabled ? undefined : undefined}
             renderItem={({ item }) => (
               <View style={{ width: width, height: height, justifyContent: 'center' }}>
-                <ZoomableImage 
-                  uri={item} 
+                <ZoomableImage
+                  uri={item}
                   onRequestScrollToggle={handleScrollToggle}
                 />
               </View>
@@ -305,7 +307,7 @@ export default function LiveCarAuctionScreen() {
   const { isGuest, isUnapproved } = useAuth();
   const [showLoginAlert, setShowLoginAlert] = useState(false);
   const [showApprovalAlert, setShowApprovalAlert] = useState(false);
-  
+
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -315,7 +317,7 @@ export default function LiveCarAuctionScreen() {
 
   const [bookingStatus, setBookingStatus] = useState<'none' | 'pending_payment' | 'intransfer' | 'delivered'>('none');
   const [bookingData, setBookingData] = useState<any>(null);
-  
+
   const [damageTypes, setDamageTypes] = useState<any[]>([]);
   const biddingDataRef = useRef<Models.BiddingInfoResponse['data'] | null>(null);
 
@@ -323,20 +325,20 @@ export default function LiveCarAuctionScreen() {
   const [elapsedTime, setElapsedTime] = useState("00:00");
   const [myBid, setMyBid] = useState<number>(0);
   const [isBidSheetVisible, setIsBidSheetVisible] = useState(false);
-  
+
   const [isAutoBidSheetVisible, setIsAutoBidSheetVisible] = useState(false);
   const [maxBid, setMaxBid] = useState<number>(0);
-  
+
   const [previewImages, setPreviewImages] = useState<string[]>([]);
   const [previewIndex, setPreviewIndex] = useState(0);
   const [isPreviewMap, setIsPreviewMap] = useState(false);
-  
+
   const [videoModalVisible, setVideoModalVisible] = useState(false);
   const [currentVideoUrl, setCurrentVideoUrl] = useState<string | null>(null);
 
   const [activeBannerIndex, setActiveBannerIndex] = useState(0);
-  const [activeInspectionIndex, setActiveInspectionIndex] = useState(0); 
-  
+  const [activeInspectionIndex, setActiveInspectionIndex] = useState(0);
+
   const [showFaultsList, setShowFaultsList] = useState(false);
 
   const [expandedDamageCategories, setExpandedDamageCategories] = useState<{ [key: string]: boolean }>({});
@@ -346,16 +348,33 @@ export default function LiveCarAuctionScreen() {
   const scrollViewRef = useRef<ScrollView>(null);
   const sectionYCoords = useRef<{ [key: string]: number }>({});
   const isManualScroll = useRef(false);
-  
+
   const [showStickyTimer, setShowStickyTimer] = useState(false);
   const timerBarHeight = useSharedValue(0);
   const timerBarOpacity = useSharedValue(0);
-  
+
   const timerBarAnimatedStyle = useAnimatedStyle(() => ({
     height: timerBarHeight.value,
     opacity: timerBarOpacity.value,
   }));
-  
+
+  // 🟢 Toast State & Animation
+  const [toastMessage, setToastMessage] = useState('');
+  const toastOpacity = useSharedValue(0);
+
+  const toastAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: toastOpacity.value,
+    transform: [{ translateY: withTiming(toastOpacity.value === 1 ? 0 : 20) }]
+  }));
+
+  const showToast = (message: string) => {
+    setToastMessage(message);
+    toastOpacity.value = withSequence(
+      withTiming(1, { duration: 300 }),
+      withDelay(2000, withTiming(0, { duration: 300 }))
+    );
+  };
+
   useEffect(() => {
     if (showStickyTimer && viewType === 'live' && bookingStatus === 'none' && !isBidSheetVisible && !isAutoBidSheetVisible) {
       timerBarHeight.value = withTiming(145, { duration: 300 });
@@ -368,7 +387,7 @@ export default function LiveCarAuctionScreen() {
 
   const getDamageBadgeColor = (damageType: string) => {
     const found = damageTypes.find(d => d.name.toLowerCase() === damageType.toLowerCase());
-    return found ? found.color : '#ff4444'; 
+    return found ? found.color : '#ff4444';
   };
 
   useEffect(() => {
@@ -501,7 +520,7 @@ export default function LiveCarAuctionScreen() {
     if (isManualScroll.current) return;
     const scrollY = event.nativeEvent.contentOffset.y;
     setShowStickyTimer(scrollY > 150);
-    
+
     const triggerPoint = scrollY + TAB_BAR_HEIGHT + 150;
     let currentTab = dynamicTabs[0];
     for (const tab of dynamicTabs) {
@@ -520,7 +539,7 @@ export default function LiveCarAuctionScreen() {
     const minNext = biddingData?.minimum_next_bid || 0;
     if (myBid - Number(biddingData?.vehicle.bid_control || 100) >= minNext) setMyBid(prev => prev - Number(biddingData?.vehicle.bid_control || 100));
   };
-  
+
   const handleAutoBidIncrement = () => setMaxBid(prev => prev + Number(biddingData?.vehicle.bid_control || 100));
   const handleAutoBidDecrement = () => {
     const minNext = biddingData?.minimum_next_bid || 0;
@@ -535,7 +554,7 @@ export default function LiveCarAuctionScreen() {
     try {
       const result = await apiService.placeBid(biddingData.vehicle.id, { current_bid: myBid, max_bid: myBid });
       if (result.success) {
-        showAlert('Success', 'Bid placed successfully!');
+        showToast('Bid placed successfully!'); // 🟢 Using Toast instead of alert
         fetchLiveBidData();
         setIsBidSheetVisible(false);
       } else {
@@ -547,20 +566,20 @@ export default function LiveCarAuctionScreen() {
       setSubmitting(false);
     }
   };
-  
+
   const handleAutoBid = async () => {
     if (isGuest) { setShowLoginAlert(true); return; }
     if (isUnapproved) { setShowApprovalAlert(true); return; }
     if (!biddingData?.vehicle) return;
     setSubmitting(true);
     try {
-      const result = await apiService.placeBid(biddingData.vehicle.id, { 
-        current_bid: biddingData.minimum_next_bid || biddingData.highest_bid || 0, 
+      const result = await apiService.placeBid(biddingData.vehicle.id, {
+        current_bid: biddingData.minimum_next_bid || biddingData.highest_bid || 0,
         max_bid: maxBid,
-        is_auto: true 
+        is_auto: true
       });
       if (result.success) {
-        showAlert('Success', 'Auto bid placed successfully!');
+        showToast('Auto bid placed successfully!'); // 🟢 Using Toast instead of alert
         fetchLiveBidData();
         setIsAutoBidSheetVisible(false);
       } else {
@@ -633,7 +652,7 @@ export default function LiveCarAuctionScreen() {
       { label: 'Engine CC', value: v.engine_cc },
       { label: 'No. of Cylinders', value: v.no_of_cylinder },
       { label: 'Horsepower (in BHP)', value: v.horsepower },
-      { label: 'Body Type', value: val(i?.body_type || v.body_type_id === 1 ? 'Sports' : 'Sedan') }, 
+      { label: 'Body Type', value: val(i?.body_type || v.body_type_id === 1 ? 'Sports' : 'Sedan') },
       { label: 'Specs', value: val(v.specs || i?.specs) },
       { label: 'Transmission Type', value: val(i?.transmission || (v.transmission_id === 1 ? 'Automatic' : 'Manual')) },
       { label: 'Color', value: val(i?.color || v.color), media: getFieldMedia('color') },
@@ -646,75 +665,53 @@ export default function LiveCarAuctionScreen() {
 
   const inspectionSections = useMemo(() => {
     if (!latestInspection) return [];
-    
+
     const i = latestInspection;
     const getVal = (key: string) => i[key] || "N/A";
     const getArr = (key: string) => Array.isArray(i[key]) && i[key].length > 0 ? i[key].join(", ") : "No visible fault";
-    
+
     const getColor = (val: string) => {
-        const v = String(val).toLowerCase();
-        if (v.includes('no leak') || v.includes('no visible') || v.includes('available') || v.includes('original') || v.includes('good')) return '#cadb2a';
-        if (v.includes('minor') || v.includes('moderate')) return '#ffaa00';
-        if (v.includes('worn') || v.includes('major') || v.includes('severe') || v.includes('fail')) return '#ff4444';
-        return '#fff'; 
+      const v = String(val).toLowerCase();
+      if (v.includes('no leak') || v.includes('no visible') || v.includes('available') || v.includes('original') || v.includes('good')) return '#cadb2a';
+      if (v.includes('minor') || v.includes('moderate')) return '#ffaa00';
+      if (v.includes('worn') || v.includes('major') || v.includes('severe') || v.includes('fail')) return '#ff4444';
+      return '#fff';
     };
 
     return [
-        {
-            title: "Engine & Transmission",
-            rows: [
-                [{ label: "Engine Oil", value: getVal('engineOil') }, { label: "Gear Oil", value: getVal('gearOil') }],
-                [{ label: "Engine Noise", value: getVal('engineNoise') }, { label: "Engine Smoke", value: getVal('engineSmoke') }],
-                [{ label: "Gear Shifting", value: getVal('gearshifting') }, { label: "4WD System", value: getVal('fourWdSystemCondition') }],
-            ],
-            comment: i.remarks || "No remarks."
-        },
-        {
-            title: "Steering, Suspension & Brakes",
-            rows: [
-                [{ label: "Brake Pads", value: getVal('brakePads') }, { label: "Brake Discs", value: getArr('brakeDiscs') }],
-                [{ label: "Suspension", value: getVal('suspension') }, { label: "Shock Absorber", value: getArr('shockAbsorberOperation') }],
-                [{ label: "Steering Operation", value: getVal('steeringOperation') }, { label: "Wheel Alignment", value: getVal('wheelAlignment') }],
-            ],
-            comment: i.comment_section1 || "No remarks."
-        },
-        {
-            title: "Wheel & Tyre",
-            rows: [
-                [{ label: "Spare Tire", value: getVal('spareTire') }, { label: "Front Left Tire", value: getVal('frontLeftTire') }],
-                [{ label: "Front Right Tire", value: getVal('frontRightTire') }, { label: "Rear Left Tire", value: getVal('rearLeftTire') }],
-                [{ label: "Rear Right Tire", value: getVal('rearRightTire') }, { label: "Tire Size", value: getVal('tiresSize') }],
-                [{ label: "Wheels Type", value: getVal('wheelsType') }, { label: "Front Rim Size", value: getVal('rimsSizeFront') }],
-                [{ label: "Rear Rim Size", value: getVal('rimsSizeRear') }, { label: "", value: "" }],
-            ],
-            comment: i.commentTire || "No remarks."
-        },
-        {
-            title: "Interior & Electricals",
-            rows: [
-                [{ label: "Speedometer Cluster", value: getVal('speedmeterCluster') }, { label: "Head Lining", value: getVal('headLining') }],
-                [{ label: "Seat Controls", value: getVal('seatControls') }, { label: "Central Lock", value: getVal('centralLockOperation') }],
-                [{ label: "Windows Control", value: getVal('windowsControl') }, { label: "Cruise Control", value: getVal('cruiseControl') }],
-                [{ label: "Sunroof Condition", value: getVal('sunroofCondition') }, { label: "AC Cooling", value: getVal('acCooling') }],
-                [{ label: "Seats Material", value: getVal('seats') }, { label: "Cooled Seats", value: getVal('cooledSeats') }],
-                [{ label: "Heated Seats", value: getVal('heatedSeats') }, { label: "Power Seats", value: getVal('powerSeats') }],
-            ],
-            comment: i.comment_section2 || "No remarks."
-        },
-        {
-            title: "Car Specs",
-            rows: [
-                [{ label: "Parking Sensors", value: getVal('parkingSensors') }, { label: "Keyless Start", value: getVal('keylessStart') }],
-                [{ label: "360 Camera", value: getVal('viveCamera') }, { label: "Blind Spot Monitor", value: getVal('blindSpot') }],
-                [{ label: "Sunroof Type", value: getVal('sunroofType') }, { label: "Heads-Up Display", value: getVal('headsDisplay') }],
-                [{ label: "Premium Sound System", value: getVal('premiumSound') }, { label: "Carbon Fiber Interior", value: getVal('carbonFiber') }],
-                [{ label: "Side Steps", value: getVal('sideSteps') }, { label: "Convertible Top", value: getVal('convertible') }],
-            ],
-            paintCondition: i.paintCondition || []
-        }
+      {
+        title: "Engine & Transmission",
+        rows: [[{ label: "Engine Oil", value: getVal('engineOil') }, { label: "Gear Oil", value: getVal('gearOil') }], [{ label: "Engine Noise", value: getVal('engineNoise') }, { label: "Engine Smoke", value: getVal('engineSmoke') }], [{ label: "Gear Shifting", value: getVal('gearshifting') }, { label: "4WD System", value: getVal('fourWdSystemCondition') }],
+        ],
+        comment: i.remarks || "No remarks."
+      },
+      {
+        title: "Steering, Suspension & Brakes",
+        rows: [[{ label: "Brake Pads", value: getVal('brakePads') }, { label: "Brake Discs", value: getArr('brakeDiscs') }], [{ label: "Suspension", value: getVal('suspension') }, { label: "Shock Absorber", value: getArr('shockAbsorberOperation') }], [{ label: "Steering Operation", value: getVal('steeringOperation') }, { label: "Wheel Alignment", value: getVal('wheelAlignment') }],
+        ],
+        comment: i.comment_section1 || "No remarks."
+      },
+      {
+        title: "Wheel & Tyre",
+        rows: [[{ label: "Spare Tire", value: getVal('spareTire') }, { label: "Front Left Tire", value: getVal('frontLeftTire') }], [{ label: "Front Right Tire", value: getVal('frontRightTire') }, { label: "Rear Left Tire", value: getVal('rearLeftTire') }], [{ label: "Rear Right Tire", value: getVal('rearRightTire') }, { label: "Tire Size", value: getVal('tiresSize') }], [{ label: "Wheels Type", value: getVal('wheelsType') }, { label: "Front Rim Size", value: getVal('rimsSizeFront') }], [{ label: "Rear Rim Size", value: getVal('rimsSizeRear') }, { label: "", value: "" }],
+        ],
+        comment: i.commentTire || "No remarks."
+      },
+      {
+        title: "Interior & Electricals",
+        rows: [[{ label: "Speedometer Cluster", value: getVal('speedmeterCluster') }, { label: "Head Lining", value: getVal('headLining') }], [{ label: "Seat Controls", value: getVal('seatControls') }, { label: "Central Lock", value: getVal('centralLockOperation') }], [{ label: "Windows Control", value: getVal('windowsControl') }, { label: "Cruise Control", value: getVal('cruiseControl') }], [{ label: "Sunroof Condition", value: getVal('sunroofCondition') }, { label: "AC Cooling", value: getVal('acCooling') }], [{ label: "Seats Material", value: getVal('seats') }, { label: "Cooled Seats", value: getVal('cooledSeats') }], [{ label: "Heated Seats", value: getVal('heatedSeats') }, { label: "Power Seats", value: getVal('powerSeats') }],
+        ],
+        comment: i.comment_section2 || "No remarks."
+      },
+      {
+        title: "Car Specs",
+        rows: [[{ label: "Parking Sensors", value: getVal('parkingSensors') }, { label: "Keyless Start", value: getVal('keylessStart') }], [{ label: "360 Camera", value: getVal('viveCamera') }, { label: "Blind Spot Monitor", value: getVal('blindSpot') }], [{ label: "Sunroof Type", value: getVal('sunroofType') }, { label: "Heads-Up Display", value: getVal('headsDisplay') }], [{ label: "Premium Sound System", value: getVal('premiumSound') }, { label: "Carbon Fiber Interior", value: getVal('carbonFiber') }], [{ label: "Side Steps", value: getVal('sideSteps') }, { label: "Convertible Top", value: getVal('convertible') }],
+        ],
+        paintCondition: i.paintCondition || []
+      }
     ].map(section => ({
-        ...section,
-        rows: section.rows.map(row => row.map(cell => ({ ...cell, color: getColor(cell.value) })))
+      ...section,
+      rows: section.rows.map(row => row.map(cell => ({ ...cell, color: getColor(cell.value) })))
     }));
 
   }, [latestInspection]);
@@ -756,7 +753,7 @@ export default function LiveCarAuctionScreen() {
       leadingUser = biddingData.bids[0].user.name;
     }
   }
-  
+
   const imageList = vehicle.images?.map((img: any) => img.path) || [];
   if (vehicle.cover_image && typeof vehicle.cover_image !== 'string') {
     if (!imageList.includes(vehicle.cover_image.path)) imageList.unshift(vehicle.cover_image.path);
@@ -768,87 +765,9 @@ export default function LiveCarAuctionScreen() {
 
   const renderStatusCard = () => {
     if (bookingStatus !== 'none') {
-        if (bookingStatus === 'pending_payment') {
-          return (
-            <View style={styles.statusCard}>
-              <View style={styles.offerRow}>
-                <View style={styles.offerItem}>
-                  <Text style={styles.offerLabel}>Seller Expectation</Text>
-                  <Text style={styles.offerValue}>AED {sellerExpectation.toLocaleString()}</Text>
-                </View>
-                <View style={styles.offerItem}>
-                  <Text style={styles.offerLabel}>My Bid (Highest)</Text>
-                  <Text style={[styles.offerValue, { color: '#cadb2a' }]}>AED {currentPrice.toLocaleString()}</Text>
-                </View>
-              </View>
-              <Feather name="clock" size={40} color="#ffaa00" style={{ marginBottom: 10 }} />
-              <Text style={styles.statusTitle}>Booking Confirmation Pending</Text>
-              <Text style={styles.statusSubText}>You have successfully booked this vehicle. Waiting for admin confirmation.</Text>
-            </View>
-          );
-        }
-        if (bookingStatus === 'intransfer') {
-          return (
-            <View style={styles.statusCard}>
-              <View style={styles.offerRow}>
-                <View style={styles.offerItem}>
-                  <Text style={styles.offerLabel}>Seller Expectation</Text>
-                  <Text style={styles.offerValue}>AED {sellerExpectation.toLocaleString()}</Text>
-                </View>
-                <View style={styles.offerItem}>
-                  <Text style={styles.offerLabel}>My Bid (Highest)</Text>
-                  <Text style={[styles.offerValue, { color: '#cadb2a' }]}>AED {currentPrice.toLocaleString()}</Text>
-                </View>
-              </View>
-              <MaterialCommunityIcons name="truck-delivery" size={40} color="#00a8ff" style={{ marginBottom: 10 }} />
-              <Text style={styles.statusTitle}>Vehicle In-Transfer</Text>
-              <Text style={styles.statusSubText}>Your vehicle is currently being transferred. Tracking info will be updated soon.</Text>
-            </View>
-          );
-        }
-        if (bookingStatus === 'delivered') {
-          return (
-            <View style={styles.statusCard}>
-              <View style={styles.offerRow}>
-                <View style={styles.offerItem}>
-                  <Text style={styles.offerLabel}>Seller Expectation</Text>
-                  <Text style={styles.offerValue}>AED {sellerExpectation.toLocaleString()}</Text>
-                </View>
-                <View style={styles.offerItem}>
-                  <Text style={styles.offerLabel}>My Bid</Text>
-                  <Text style={[styles.offerValue, { color: '#cadb2a' }]}>AED {currentPrice.toLocaleString()}</Text>
-                </View>
-              </View>
-              <Feather name="check-circle" size={40} color="#cadb2a" style={{ marginBottom: 10 }} />
-              <Text style={styles.statusTitle}>Vehicle Delivered</Text>
-              <Text style={styles.statusSubText}>Your vehicle has been successfully delivered. Enjoy your ride!</Text>
-            </View>
-          );
-        }
-      }
-      if (viewType === 'upcoming') {
+      if (bookingStatus === 'pending_payment') {
         return (
-          <View style={styles.countdownGrid}>
-            <View style={styles.countBox}><Text style={styles.countNum}>{countdown.days}</Text><Text style={styles.countLabel}>Days</Text></View>
-            <View style={styles.countBox}><Text style={styles.countNum}>{String(countdown.hours).padStart(2, '0')}</Text><Text style={styles.countLabel}>Hrs</Text></View>
-            <View style={styles.countBox}><Text style={styles.countNum}>{String(countdown.minutes).padStart(2, '0')}</Text><Text style={styles.countLabel}>Min</Text></View>
-            <View style={styles.countBox}><Text style={styles.countNum}>{String(countdown.seconds).padStart(2, '0')}</Text><Text style={styles.countLabel}>Sec</Text></View>
-          </View>
-        );
-      }
-      if (viewType === 'live') {
-        return (
-          <View style={styles.countdownGrid}>
-            <View style={styles.countBox}><Text style={styles.countNum}>{countdown.days}</Text><Text style={styles.countLabel}>Days</Text></View>
-            <View style={styles.countBox}><Text style={styles.countNum}>{String(countdown.hours).padStart(2, '0')}</Text><Text style={styles.countLabel}>Hrs</Text></View>
-            <View style={styles.countBox}><Text style={styles.countNum}>{String(countdown.minutes).padStart(2, '0')}</Text><Text style={styles.countLabel}>Min</Text></View>
-            <View style={styles.countBox}><Text style={styles.countNum}>{String(countdown.seconds).padStart(2, '0')}</Text><Text style={styles.countLabel}>Sec</Text></View>
-          </View>
-        );
-      } else {
-        return (
-          <View style={styles.offerCard}>
-            <Text style={styles.offerTitle}>Your Offer has been Accepted</Text>
+          <View style={styles.statusCard}>
             <View style={styles.offerRow}>
               <View style={styles.offerItem}>
                 <Text style={styles.offerLabel}>Seller Expectation</Text>
@@ -859,11 +778,89 @@ export default function LiveCarAuctionScreen() {
                 <Text style={[styles.offerValue, { color: '#cadb2a' }]}>AED {currentPrice.toLocaleString()}</Text>
               </View>
             </View>
-            <Text style={styles.finalPriceText}>AED {currentPrice.toLocaleString()}</Text>
-            <Text style={styles.offerSubText}>You may continue to book your car now</Text>
+            <Feather name="clock" size={40} color="#ffaa00" style={{ marginBottom: 10 }} />
+            <Text style={styles.statusTitle}>Booking Confirmation Pending</Text>
+            <Text style={styles.statusSubText}>You have successfully booked this vehicle. Waiting for admin confirmation.</Text>
           </View>
         );
       }
+      if (bookingStatus === 'intransfer') {
+        return (
+          <View style={styles.statusCard}>
+            <View style={styles.offerRow}>
+              <View style={styles.offerItem}>
+                <Text style={styles.offerLabel}>Seller Expectation</Text>
+                <Text style={styles.offerValue}>AED {sellerExpectation.toLocaleString()}</Text>
+              </View>
+              <View style={styles.offerItem}>
+                <Text style={styles.offerLabel}>My Bid (Highest)</Text>
+                <Text style={[styles.offerValue, { color: '#cadb2a' }]}>AED {currentPrice.toLocaleString()}</Text>
+              </View>
+            </View>
+            <MaterialCommunityIcons name="truck-delivery" size={40} color="#00a8ff" style={{ marginBottom: 10 }} />
+            <Text style={styles.statusTitle}>Vehicle In-Transfer</Text>
+            <Text style={styles.statusSubText}>Your vehicle is currently being transferred. Tracking info will be updated soon.</Text>
+          </View>
+        );
+      }
+      if (bookingStatus === 'delivered') {
+        return (
+          <View style={styles.statusCard}>
+            <View style={styles.offerRow}>
+              <View style={styles.offerItem}>
+                <Text style={styles.offerLabel}>Seller Expectation</Text>
+                <Text style={styles.offerValue}>AED {sellerExpectation.toLocaleString()}</Text>
+              </View>
+              <View style={styles.offerItem}>
+                <Text style={styles.offerLabel}>My Bid</Text>
+                <Text style={[styles.offerValue, { color: '#cadb2a' }]}>AED {currentPrice.toLocaleString()}</Text>
+              </View>
+            </View>
+            <Feather name="check-circle" size={40} color="#cadb2a" style={{ marginBottom: 10 }} />
+            <Text style={styles.statusTitle}>Vehicle Delivered</Text>
+            <Text style={styles.statusSubText}>Your vehicle has been successfully delivered. Enjoy your ride!</Text>
+          </View>
+        );
+      }
+    }
+    if (viewType === 'upcoming') {
+      return (
+        <View style={styles.countdownGrid}>
+          <View style={styles.countBox}><Text style={styles.countNum}>{countdown.days}</Text><Text style={styles.countLabel}>Days</Text></View>
+          <View style={styles.countBox}><Text style={styles.countNum}>{String(countdown.hours).padStart(2, '0')}</Text><Text style={styles.countLabel}>Hrs</Text></View>
+          <View style={styles.countBox}><Text style={styles.countNum}>{String(countdown.minutes).padStart(2, '0')}</Text><Text style={styles.countLabel}>Min</Text></View>
+          <View style={styles.countBox}><Text style={styles.countNum}>{String(countdown.seconds).padStart(2, '0')}</Text><Text style={styles.countLabel}>Sec</Text></View>
+        </View>
+      );
+    }
+    if (viewType === 'live') {
+      return (
+        <View style={styles.countdownGrid}>
+          <View style={styles.countBox}><Text style={styles.countNum}>{countdown.days}</Text><Text style={styles.countLabel}>Days</Text></View>
+          <View style={styles.countBox}><Text style={styles.countNum}>{String(countdown.hours).padStart(2, '0')}</Text><Text style={styles.countLabel}>Hrs</Text></View>
+          <View style={styles.countBox}><Text style={styles.countNum}>{String(countdown.minutes).padStart(2, '0')}</Text><Text style={styles.countLabel}>Min</Text></View>
+          <View style={styles.countBox}><Text style={styles.countNum}>{String(countdown.seconds).padStart(2, '0')}</Text><Text style={styles.countLabel}>Sec</Text></View>
+        </View>
+      );
+    } else {
+      return (
+        <View style={styles.offerCard}>
+          <Text style={styles.offerTitle}>Your Offer has been Accepted</Text>
+          <View style={styles.offerRow}>
+            <View style={styles.offerItem}>
+              <Text style={styles.offerLabel}>Seller Expectation</Text>
+              <Text style={styles.offerValue}>AED {sellerExpectation.toLocaleString()}</Text>
+            </View>
+            <View style={styles.offerItem}>
+              <Text style={styles.offerLabel}>My Bid (Highest)</Text>
+              <Text style={[styles.offerValue, { color: '#cadb2a' }]}>AED {currentPrice.toLocaleString()}</Text>
+            </View>
+          </View>
+          <Text style={styles.finalPriceText}>AED {currentPrice.toLocaleString()}</Text>
+          <Text style={styles.offerSubText}>You may continue to book your car now</Text>
+        </View>
+      );
+    }
   };
 
   return (
@@ -891,7 +888,7 @@ export default function LiveCarAuctionScreen() {
           <View>
             <View style={styles.topInfoRow}>
               {viewType === 'upcoming' ? (
-                  <Text style={styles.leadingText}>{formatStartDate(vehicle.auction_start_date)}</Text>
+                <Text style={styles.leadingText}>{formatStartDate(vehicle.auction_start_date)}</Text>
               ) : viewType === 'live' && bookingStatus === 'none' ? (
                 <>
                   <Text style={styles.leadingText}><Feather name="user" size={14} color="#cadb2a" /> {leadingUser} is Leading</Text>
@@ -981,24 +978,24 @@ export default function LiveCarAuctionScreen() {
           {/* 🟢 Car Details Section */}
           <View onLayout={(e) => handleLayout(e, 'Car Details')} style={styles.sectionContainer}>
             <Text style={styles.sectionTitle}>Car Details</Text>
-            
+
             <View style={styles.carDetailsGrid}>
               {carDetailItems.map((item, idx) => (
                 <View key={idx} style={[styles.carDetailItem, item.fullWidth && { width: '100%' }]}>
                   <Text style={styles.carDetailLabel}>{item.label}</Text>
                   <View style={styles.carDetailValueRow}>
                     <Text style={styles.carDetailValue}>{item.value || 'N/A'}</Text>
-                    
+
                     {item.media && (
                       <TouchableOpacity
                         onPress={() => {
                           const path = item.media.path.startsWith('http') ? item.media.path : `${STORAGE_BASE_URL}${item.media.path}`;
                           if (item.media.file_type === 'video') handleVideoOpen(path);
-                          else handleImageOpen([path], 0, false); 
+                          else handleImageOpen([path], 0, false);
                         }}
                         style={{ marginLeft: 8 }}
                       >
-                         <Feather name="camera" size={16} color="#00a8ff" />
+                        <Feather name="camera" size={16} color="#00a8ff" />
                       </TouchableOpacity>
                     )}
                   </View>
@@ -1010,28 +1007,28 @@ export default function LiveCarAuctionScreen() {
           {/* 🟢 Damage Map Section (With Toggle) */}
           {latestInspection?.damage_file_path && (
             <View style={styles.sectionContainer}>
-               <View style={styles.featureHeader}>
+              <View style={styles.featureHeader}>
                 <View>
-                   <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>Damage Assessment</Text>
-                   <Text style={{color: '#888', fontSize: 12}}>({latestInspection.damages?.length || 0} Points)</Text>
+                  <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>Damage Assessment</Text>
+                  <Text style={{ color: '#888', fontSize: 12 }}>({latestInspection.damages?.length || 0} Points)</Text>
                 </View>
-                
+
                 {/* Checkbox Toggle */}
-                <TouchableOpacity 
-                   style={{flexDirection: 'row', alignItems: 'center'}} 
-                   onPress={() => setShowFaultsList(!showFaultsList)}
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center' }}
+                  onPress={() => setShowFaultsList(!showFaultsList)}
                 >
-                   <Feather name={showFaultsList ? "check-square" : "square"} size={18} color="#cadb2a" />
-                   <Text style={{color: '#ccc', marginLeft: 8, fontSize: 12, fontFamily: 'Poppins'}}>View Faults List</Text>
+                  <Feather name={showFaultsList ? "check-square" : "square"} size={18} color="#cadb2a" />
+                  <Text style={{ color: '#ccc', marginLeft: 8, fontSize: 12, fontFamily: 'Poppins' }}>View Faults List</Text>
                 </TouchableOpacity>
               </View>
-              
-              <Text style={{color:'#666', fontSize:11, marginBottom: 10}}>Interactive damage visualization</Text>
+
+              <Text style={{ color: '#666', fontSize: 11, marginBottom: 10 }}>Interactive damage visualization</Text>
 
               <TouchableOpacity onPress={() => handleImageOpen([latestInspection.damage_file_path], 0, true)} style={styles.damageMapContainer}>
                 <Image source={{ uri: latestInspection.damage_file_path }} style={styles.damageMapImage} resizeMode="contain" />
               </TouchableOpacity>
-              
+
               {/* Conditional List based on Checkbox */}
               {showFaultsList && latestInspection.damages && latestInspection.damages.length > 0 && (
                 <View style={{ marginTop: 15 }}>
@@ -1073,108 +1070,62 @@ export default function LiveCarAuctionScreen() {
           {/* 🟢 Inspection Report Sections */}
           {latestInspection && (
             <View onLayout={(e) => handleLayout(e, 'Inspection')} style={styles.sectionContainer}>
-              
+
               {/* Accordions */}
               {inspectionSections.map((section, index) => (
-                <InspectionAccordion 
-                    key={index} 
-                    title={section.title} 
-                    isOpen={activeAccordion === section.title} 
-                    onPress={() => setActiveAccordion(activeAccordion === section.title ? null : section.title)}
+                <InspectionAccordion
+                  key={index}
+                  title={section.title}
+                  isOpen={activeAccordion === section.title}
+                  onPress={() => setActiveAccordion(activeAccordion === section.title ? null : section.title)}
                 >
-                    {section.rows.map((row, rIdx) => (
-                        <View key={rIdx} style={styles.inspGridRow}>
-                            {row.map((cell, cIdx) => (
-                                <View key={cIdx} style={styles.inspGridItem}>
-                                    <Text style={styles.inspLabel}>{cell.label}</Text>
-                                    <Text style={[styles.inspValue, { color: cell.color }]}>{cell.value}</Text>
-                                </View>
-                            ))}
+                  {section.rows.map((row, rIdx) => (
+                    <View key={rIdx} style={styles.inspGridRow}>
+                      {row.map((cell, cIdx) => (
+                        <View key={cIdx} style={styles.inspGridItem}>
+                          <Text style={styles.inspLabel}>{cell.label}</Text>
+                          <Text style={[styles.inspValue, { color: cell.color }]}>{cell.value}</Text>
                         </View>
-                    ))}
-                    
-                    {/* Paint Condition for Car Specs */}
-                    {/* @ts-ignore */}
-                    {section.paintCondition && section.paintCondition.length > 0 && (
-                        <View style={{ marginTop: 10 }}>
-                             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
-                                <Text style={styles.inspLabel}>Paint Condition</Text>
-                             </View>
-                             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5 }}>
-                                {/* @ts-ignore */}
-                                {section.paintCondition.map((pc: string, i: number) => {
-                                    const { backgroundColor, label } = getPaintBadgeColor(pc);
-                                    return <View key={i} style={[styles.tag, { backgroundColor }]}><Text style={[styles.tagText, { color: '#fff', fontWeight: 'bold' }]}>{label}</Text></View>;
-                                })}
-                             </View>
-                        </View>
-                    )}
+                      ))}
+                    </View>
+                  ))}
 
-                    {section.comment && (
-                        <View style={styles.inspCommentBox}>
-                            <Text style={styles.inspCommentLabel}>Comments:</Text>
-                            <Text style={styles.inspCommentText}>{section.comment}</Text>
-                        </View>
-                    )}
+                  {/* Paint Condition for Car Specs */}
+                  {/* @ts-ignore */}
+                  {section.paintCondition && section.paintCondition.length > 0 && (
+                    <View style={{ marginTop: 10 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
+                        <Text style={styles.inspLabel}>Paint Condition</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5 }}>
+                        {/* @ts-ignore */}
+                        {section.paintCondition.map((pc: string, i: number) => {
+                          const { backgroundColor, label } = getPaintBadgeColor(pc);
+                          return <View key={i} style={[styles.tag, { backgroundColor }]}><Text style={[styles.tagText, { color: '#fff', fontWeight: 'bold' }]}>{label}</Text></View>;
+                        })}
+                      </View>
+                    </View>
+                  )}
+
+                  {section.comment && (
+                    <View style={styles.inspCommentBox}>
+                      <Text style={styles.inspCommentLabel}>Comments:</Text>
+                      <Text style={styles.inspCommentText}>{section.comment}</Text>
+                    </View>
+                  )}
                 </InspectionAccordion>
               ))}
 
               {/* 🟢 Final Conclusion (Improved Styling) */}
               {latestInspection.final_conclusion ? (
                 <View style={styles.finalConclusionContainer}>
-                    <View style={styles.finalConclusionHeader}>
-                        <MaterialCommunityIcons name="clipboard-check-outline" size={20} color="#000" />
-                        <Text style={styles.finalConclusionTitle}>FINAL CONCLUSION</Text>
-                    </View>
-                    <Text style={styles.finalConclusionText}>{latestInspection.final_conclusion}</Text>
+                  <View style={styles.finalConclusionHeader}>
+                    <MaterialCommunityIcons name="clipboard-check-outline" size={20} color="#000" />
+                    <Text style={styles.finalConclusionTitle}>FINAL CONCLUSION</Text>
+                  </View>
+                  <Text style={styles.finalConclusionText}>{latestInspection.final_conclusion}</Text>
                 </View>
               ) : null}
-
-              {/* Inspection Gallery - HIDDEN FOR NOW
-              {latestInspection.images && latestInspection.images.length > 0 && (
-                <View style={{ marginTop: 20 }}>
-                  <Text style={[styles.sectionTitle, { paddingHorizontal: 0 }]}>Inspection Gallery</Text>
-                  <View style={{ height: 250, width: width, marginLeft: -16 }}>
-                    <ScrollView
-                      horizontal
-                      pagingEnabled
-                      showsHorizontalScrollIndicator={false}
-                      onMomentumScrollEnd={(e) => {
-                        const idx = Math.round(e.nativeEvent.contentOffset.x / width);
-                        setActiveInspectionIndex(idx);
-                      }}
-                    >
-                      {latestInspection.images.map((img: any, idx: number) => {
-                        const uri = img.path.startsWith('http') ? img.path : `${STORAGE_BASE_URL}${img.path}`;
-                        return (
-                          <TouchableOpacity
-                            key={idx}
-                            onPress={() => {
-                                const inspectionUrls = latestInspection.images.map((im: any) => 
-                                    im.path.startsWith('http') ? im.path : `${STORAGE_BASE_URL}${im.path}`
-                                );
-                                handleImageOpen(inspectionUrls, idx, false);
-                            }}
-                            activeOpacity={0.9}
-                          >
-                            <Image
-                              source={{ uri }}
-                              style={{ width: width, height: 250, resizeMode: 'cover' }}
-                            />
-                          </TouchableOpacity>
-                        )
-                      })}
-                    </ScrollView>
-
-                    <View style={styles.paginationContainer}>
-                      {latestInspection.images.map((_: any, i: number) => (
-                        <View key={i} style={[styles.dot, i === activeInspectionIndex && styles.activeDot]} />
-                      ))}
-                    </View>
-                  </View>
-                </View>
-              )}
-              */}
 
             </View>
           )}
@@ -1182,19 +1133,19 @@ export default function LiveCarAuctionScreen() {
           {/* 🟢 Remarks Section (Renamed & Styled) */}
           <View onLayout={(e) => handleLayout(e, 'Remarks')} style={styles.sectionContainer}>
             <View style={styles.sectionHeaderRow}>
-                 <View style={styles.sectionIconBadge}>
-                    <Feather name="message-square" size={16} color="#000" />
-                 </View>
-                 <Text style={styles.sectionTitleNew}>Remarks</Text>
+              <View style={styles.sectionIconBadge}>
+                <Feather name="message-square" size={16} color="#000" />
+              </View>
+              <Text style={styles.sectionTitleNew}>Remarks</Text>
             </View>
             <View style={styles.remarksContainer}>
-                <Text style={styles.remarksText}>{vehicle.remarks || "No remarks."}</Text>
+              <Text style={styles.remarksText}>{vehicle.remarks || "No remarks."}</Text>
             </View>
           </View>
 
           <View style={{ height: 100 }} />
         </ScrollView>
-        
+
         {/* Sticky Bid Section */}
         <Animated.View style={[styles.stickyTimerBarWrapper, timerBarAnimatedStyle]}>
           <View style={styles.stickyBidSection}>
@@ -1208,7 +1159,7 @@ export default function LiveCarAuctionScreen() {
                 <Text style={[styles.stickyPriceValue, { color: '#cadb2a' }]}>AED {currentPrice.toLocaleString()}</Text>
               </View>
             </View>
-            
+
             <View style={styles.stickyTimerRow}>
               <View style={styles.timerBox}>
                 <Text style={styles.timerNumber}>{String(countdown.days).padStart(2, '0')}</Text>
@@ -1334,6 +1285,12 @@ export default function LiveCarAuctionScreen() {
           onClose={() => setVideoModalVisible(false)}
         />
 
+        {/* 🟢 Toast Component */}
+        <Animated.View style={[styles.toastContainer, toastAnimatedStyle]}>
+          <Feather name="check-circle" size={18} color="#cadb2a" style={{ marginRight: 8 }} />
+          <Text style={styles.toastText}>{toastMessage}</Text>
+        </Animated.View>
+
         <CustomAlert
           visible={showLoginAlert}
           title="Please Login"
@@ -1390,7 +1347,7 @@ const styles = StyleSheet.create({
   sectionContainer: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 20 },
   sectionTitle: { color: '#cadb2a', fontSize: 16, fontWeight: 'bold', fontFamily: 'Poppins', marginBottom: 10 },
   subSectionTitle: { color: '#aaa', fontSize: 13, fontWeight: '600', fontFamily: 'Poppins', marginBottom: 8, marginTop: 5 },
-  
+
   carDetailsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1423,7 +1380,7 @@ const styles = StyleSheet.create({
   featureText: { color: '#fff', fontSize: 14, fontFamily: 'Poppins', flex: 1 },
   showMoreBtn: { alignItems: 'center', marginTop: 15 },
   showMoreText: { color: '#888', fontSize: 14, fontFamily: 'Poppins' },
-  
+
   infoBlock: { marginBottom: 15, marginTop: 15 },
   tag: { borderRadius: 4, paddingHorizontal: 8, paddingVertical: 4, marginRight: 5, marginBottom: 5 },
   tagText: { fontSize: 12, fontFamily: 'Poppins' },
@@ -1501,8 +1458,8 @@ const styles = StyleSheet.create({
   statusCard: { backgroundColor: '#111', marginHorizontal: 16, marginBottom: 20, borderRadius: 12, padding: 20, alignItems: 'center', borderWidth: 1, borderColor: '#333' },
   statusTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold', fontFamily: 'Poppins', marginBottom: 8, textAlign: 'center' },
   statusSubText: { color: '#aaa', fontSize: 13, fontFamily: 'Poppins', textAlign: 'center', lineHeight: 20 },
-  commentContainer: {marginTop: 10},
-  
+  commentContainer: { marginTop: 10 },
+
   // 🟢 New Styling for Final Conclusion & Remarks
   finalConclusionContainer: {
     backgroundColor: '#111',
@@ -1538,7 +1495,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     fontFamily: 'Poppins',
   },
-  
+
   sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1572,4 +1529,31 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontFamily: 'Poppins',
   },
+
+  // 🟢 Toast Styles
+  toastContainer: {
+    position: 'absolute',
+    bottom: 120, // Adjusted to be visible above bottom sheet if open
+    alignSelf: 'center',
+    backgroundColor: 'rgba(20, 20, 20, 0.95)',
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 30,
+    zIndex: 9999,
+    borderWidth: 1,
+    borderColor: '#cadb2a',
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 8,
+  },
+  toastText: {
+    color: '#fff',
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    fontWeight: '600',
+  }
 });
