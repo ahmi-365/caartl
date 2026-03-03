@@ -1,4 +1,4 @@
-import { Feather, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ResizeMode, Video } from 'expo-av';
@@ -27,10 +27,10 @@ import {
 import Animated, {
   runOnJS,
   useAnimatedStyle,
-  useSharedValue,
+  useSharedValue, // 🟢 Added for Toast animation
+  withDelay,
+  withSequence,
   withTiming,
-  withSequence, // 🟢 Added for Toast animation
-  withDelay,    // 🟢 Added for Toast animation
 } from "react-native-reanimated";
 
 import CustomAlert from '../components/ui/CustomAlert';
@@ -375,16 +375,15 @@ export default function LiveCarAuctionScreen() {
     );
   };
 
-  useEffect(() => {
+ useEffect(() => {
     if (showStickyTimer && viewType === 'live' && bookingStatus === 'none' && !isBidSheetVisible && !isAutoBidSheetVisible) {
-      timerBarHeight.value = withTiming(145, { duration: 300 });
+      timerBarHeight.value = withTiming(200, { duration: 300 }); 
       timerBarOpacity.value = withTiming(1, { duration: 300 });
     } else {
       timerBarHeight.value = withTiming(0, { duration: 200 });
       timerBarOpacity.value = withTiming(0, { duration: 200 });
     }
   }, [showStickyTimer, viewType, bookingStatus, isBidSheetVisible, isAutoBidSheetVisible]);
-
   const getDamageBadgeColor = (damageType: string) => {
     const found = damageTypes.find(d => d.name.toLowerCase() === damageType.toLowerCase());
     return found ? found.color : '#ff4444';
@@ -1149,6 +1148,17 @@ export default function LiveCarAuctionScreen() {
         {/* Sticky Bid Section */}
         <Animated.View style={[styles.stickyTimerBarWrapper, timerBarAnimatedStyle]}>
           <View style={styles.stickyBidSection}>
+            <View style={styles.stickyAccentRow}>
+              <View style={styles.stickyAccentLine} />
+              <View style={styles.stickyAccentChip}>
+                <View style={styles.stickyAccentDotOuter}>
+                  <View style={styles.stickyAccentDot} />
+                </View>
+                <Text style={styles.stickyAccentText}>LIVE</Text>
+              </View>
+              <View style={styles.stickyAccentLine} />
+            </View>
+
             <View style={styles.stickyPriceRow}>
               <View style={styles.stickyPriceBox}>
                 <Text style={styles.stickyPriceLabel}>Seller Expectation</Text>
@@ -1399,17 +1409,17 @@ const styles = StyleSheet.create({
   autoBidText: { color: '#cadb2a', fontSize: 15, fontWeight: 'bold', fontFamily: 'Poppins' },
   placeBidBtn: { flex: 1, backgroundColor: '#cadb2a', borderRadius: 12, paddingVertical: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   placeBidText: { color: '#000', fontSize: 15, fontWeight: 'bold', fontFamily: 'Poppins' },
-  bottomSheet: { backgroundColor: '#111', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25, borderWidth: 1, borderColor: '#cadb2a', position: 'absolute', bottom: 0, width: '100%' },
+  bottomSheet: { backgroundColor: '#111', borderTopLeftRadius: 30, borderTopRightRadius: 30, paddingHorizontal: 20, paddingTop: 18, paddingBottom: 14, borderWidth: 1, borderColor: '#cadb2a', position: 'absolute', bottom: 0, width: '100%' },
   bottomArrowContainer: { alignItems: 'center', marginTop: -40, marginBottom: 15, alignSelf: 'center', backgroundColor: '#000', padding: 8, borderRadius: 50, borderWidth: 1, borderColor: '#cadb2a' },
-  winningOfferTitle: { color: '#fff', fontSize: 16, fontWeight: 'bold', textAlign: 'center', marginBottom: 25 },
-  bidControlRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25 },
+  winningOfferTitle: { color: '#fff', fontSize: 16, fontWeight: 'bold', textAlign: 'center', marginBottom: 18 },
+  bidControlRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 },
   circleBtnRed: { width: 50, height: 50, borderRadius: 25, borderWidth: 1, borderColor: '#ff4444', justifyContent: 'center', alignItems: 'center' },
   circleBtnGreen: { width: 50, height: 50, borderRadius: 25, borderWidth: 1, borderColor: '#cadb2a', justifyContent: 'center', alignItems: 'center' },
   bidAmountText: { color: '#fff', fontSize: 32, fontWeight: 'bold', fontFamily: 'Lato', textAlign: 'center' },
   currencyText: { fontSize: 12, color: '#888', textAlign: 'center' },
   sheetPlaceBidBtn: { backgroundColor: '#cadb2a', height: 55, borderRadius: 14, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
   sheetPlaceBidBtnText: { color: '#000', fontSize: 18, fontWeight: 'bold' },
-  minIncText: { color: '#666', fontSize: 11, textAlign: 'center', marginTop: 15 },
+  minIncText: { color: '#666', fontSize: 11, textAlign: 'center', marginTop: 10 },
   previewContainer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center' },
   previewContainerWhite: { backgroundColor: '#fff' },
   videoModalContainer: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
@@ -1427,7 +1437,52 @@ const styles = StyleSheet.create({
   offerItem: { width: '48%', backgroundColor: '#000', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#222', alignItems: 'center' },
   offerLabel: { color: '#888', fontSize: 10, marginBottom: 4, fontFamily: 'Poppins' },
   stickyTimerBarWrapper: { overflow: 'hidden' },
-  stickyBidSection: { backgroundColor: '#000', paddingVertical: 16, paddingHorizontal: 16, borderTopWidth: 1, borderTopColor: '#cadb2a' },
+  stickyBidSection: { backgroundColor: '#000', paddingVertical: 16, paddingHorizontal: 16 },
+  stickyAccentRow: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  stickyAccentLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(202, 219, 42, 0.38)',
+  },
+  stickyAccentChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#111',
+    borderWidth: 1,
+    borderColor: 'rgba(202, 219, 42, 0.55)',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    marginHorizontal: 10,
+  },
+  stickyAccentDotOuter: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: 'rgba(202, 219, 42, 0.16)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 6,
+  },
+  stickyAccentDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#cadb2a',
+  },
+  stickyAccentText: {
+    color: '#cadb2a',
+    fontSize: 10,
+    fontWeight: '700',
+    fontFamily: 'Poppins',
+    letterSpacing: 0.7,
+  },
   stickyPriceRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16, gap: 12 },
   stickyPriceBox: { flex: 1, backgroundColor: '#111', borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#222' },
   stickyPriceBoxHighlight: { borderColor: '#cadb2a' },
