@@ -3,6 +3,7 @@ import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ResizeMode, Video } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Image as ExpoImage } from 'expo-image';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -27,7 +28,7 @@ import {
 import Animated, {
   runOnJS,
   useAnimatedStyle,
-  useSharedValue, // 🟢 Added for Toast animation
+  useSharedValue,
   withDelay,
   withSequence,
   withTiming,
@@ -50,7 +51,9 @@ const TAB_BAR_HEIGHT = 60;
 // ==========================================
 // 1. CUSTOM ZOOMABLE IMAGE COMPONENT
 // ==========================================
-const ZoomableImage = ({ uri, onRequestScrollToggle }: { uri: string, onRequestScrollToggle: (locked: boolean) => void }) => {
+const AnimatedExpoImage = Animated.createAnimatedComponent(ExpoImage);
+
+const ZoomableImage = ({ uri, onRequestScrollToggle, isRotated = false }: { uri: string, onRequestScrollToggle: (locked: boolean) => void, isRotated?: boolean }) => {
   const [isZoomed, setIsZoomed] = useState(false);
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
@@ -119,20 +122,28 @@ const ZoomableImage = ({ uri, onRequestScrollToggle }: { uri: string, onRequestS
     ? Gesture.Simultaneous(pinchGesture, panGesture, doubleTapGesture)
     : Gesture.Simultaneous(pinchGesture, doubleTapGesture);
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [
+  const animatedStyle = useAnimatedStyle(() => {
+    const t: any[] = [
       { translateX: translateX.value },
       { translateY: translateY.value },
       { scale: scale.value },
-    ],
-  }));
+    ];
+    if (isRotated) {
+      t.push({ rotate: '90deg' });
+    }
+    return { transform: t };
+  });
 
   return (
     <GestureDetector gesture={composed}>
       <Animated.View style={{ width, height, justifyContent: 'center', alignItems: 'center' }}>
-        <Animated.Image
+        <AnimatedExpoImage
           source={{ uri }}
-          style={[{ width: '100%', height: '80%', resizeMode: 'contain' }, animatedStyle]}
+          style={[
+            isRotated ? { width: height * 0.8, height: width } : { width: '100%', height: '80%' },
+            animatedStyle
+          ]}
+          contentFit="contain"
         />
       </Animated.View>
     </GestureDetector>
@@ -143,7 +154,7 @@ const ZoomableImage = ({ uri, onRequestScrollToggle }: { uri: string, onRequestS
 // 2. MODAL COMPONENTS
 // ==========================================
 
-const ImagePreviewModal = ({ visible, images = [], initialIndex = 0, onClose, isWhiteBackground = false }: any) => {
+const ImagePreviewModal = ({ visible, images = [], initialIndex = 0, onClose, isWhiteBackground = false, isRotated = false }: any) => {
   const flatListRef = useRef<FlatList>(null);
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [scrollEnabled, setScrollEnabled] = useState(true);
@@ -197,6 +208,7 @@ const ImagePreviewModal = ({ visible, images = [], initialIndex = 0, onClose, is
                 <ZoomableImage
                   uri={item}
                   onRequestScrollToggle={handleScrollToggle}
+                  isRotated={isRotated}
                 />
               </View>
             )}
@@ -358,7 +370,6 @@ export default function LiveCarAuctionScreen() {
     opacity: timerBarOpacity.value,
   }));
 
-  // 🟢 Toast State & Animation
   const [toastMessage, setToastMessage] = useState('');
   const toastOpacity = useSharedValue(0);
 
@@ -375,15 +386,16 @@ export default function LiveCarAuctionScreen() {
     );
   };
 
- useEffect(() => {
+  useEffect(() => {
     if (showStickyTimer && viewType === 'live' && bookingStatus === 'none' && !isBidSheetVisible && !isAutoBidSheetVisible) {
-      timerBarHeight.value = withTiming(200, { duration: 300 }); 
+      timerBarHeight.value = withTiming(200, { duration: 300 });
       timerBarOpacity.value = withTiming(1, { duration: 300 });
     } else {
       timerBarHeight.value = withTiming(0, { duration: 200 });
       timerBarOpacity.value = withTiming(0, { duration: 200 });
     }
   }, [showStickyTimer, viewType, bookingStatus, isBidSheetVisible, isAutoBidSheetVisible]);
+
   const getDamageBadgeColor = (damageType: string) => {
     const found = damageTypes.find(d => d.name.toLowerCase() === damageType.toLowerCase());
     return found ? found.color : '#ff4444';
@@ -553,7 +565,7 @@ export default function LiveCarAuctionScreen() {
     try {
       const result = await apiService.placeBid(biddingData.vehicle.id, { current_bid: myBid, max_bid: myBid });
       if (result.success) {
-        showToast('Bid placed successfully!'); // 🟢 Using Toast instead of alert
+        showToast('Bid placed successfully!');
         fetchLiveBidData();
         setIsBidSheetVisible(false);
       } else {
@@ -578,7 +590,7 @@ export default function LiveCarAuctionScreen() {
         is_auto: true
       });
       if (result.success) {
-        showToast('Auto bid placed successfully!'); // 🟢 Using Toast instead of alert
+        showToast('Auto bid placed successfully!');
         fetchLiveBidData();
         setIsAutoBidSheetVisible(false);
       } else {
@@ -626,14 +638,34 @@ export default function LiveCarAuctionScreen() {
     return list.length > 0 ? list[list.length - 1] : null;
   }, [fullData]);
 
-  const getFieldMedia = (fieldName: string) => {
+  // 🟢 Helper to get media specifically for the inspection sections
+  const getMediaForLabel = useCallback((label: string) => {
     if (!latestInspection?.fields) return null;
-    const field = latestInspection.fields.find((f: any) => f.name.toLowerCase() === fieldName.toLowerCase());
+    // Find field by matching the name without spaces or special characters
+    const normalize = (str: string) => str.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+    const field = latestInspection.fields.find((f: any) => normalize(f.name) === normalize(label));
     if (field && field.files && field.files.length > 0) {
       return field.files[0];
     }
     return null;
-  };
+  }, [latestInspection]);
+
+  // For older CarDetails specific logic
+  const getFieldMedia = (fieldName: string) => getMediaForLabel(fieldName);
+
+  const allFieldImages = useMemo(() => {
+    if (!latestInspection?.fields) return [];
+    const images: string[] = [];
+    latestInspection.fields.forEach((field: any) => {
+      field.files?.forEach((file: any) => {
+        if (file.file_type !== 'video') {
+          const path = file.path.startsWith('http') ? file.path : `${STORAGE_BASE_URL}${file.path}`;
+          images.push(path);
+        }
+      });
+    });
+    return images;
+  }, [latestInspection]);
 
   const carDetailItems = useMemo(() => {
     if (!fullData?.vehicle) return [];
@@ -662,6 +694,7 @@ export default function LiveCarAuctionScreen() {
     ];
   }, [fullData, latestInspection]);
 
+  // 🟢 Updated inspectionSections to include media checking for every single field
   const inspectionSections = useMemo(() => {
     if (!latestInspection) return [];
 
@@ -680,31 +713,54 @@ export default function LiveCarAuctionScreen() {
     return [
       {
         title: "Engine & Transmission",
-        rows: [[{ label: "Engine Oil", value: getVal('engineOil') }, { label: "Gear Oil", value: getVal('gearOil') }], [{ label: "Engine Noise", value: getVal('engineNoise') }, { label: "Engine Smoke", value: getVal('engineSmoke') }], [{ label: "Gear Shifting", value: getVal('gearshifting') }, { label: "4WD System", value: getVal('fourWdSystemCondition') }],
+        rows: [
+          [{ label: "Engine Oil", value: getVal('engineOil'), media: getMediaForLabel('Engine Oil') }, { label: "Gear Oil", value: getVal('gearOil'), media: getMediaForLabel('Gear Oil') }],
+          [{ label: "Engine Noise", value: getVal('engineNoise'), media: getMediaForLabel('Engine Noise') }, { label: "Engine Smoke", value: getVal('engineSmoke'), media: getMediaForLabel('Engine Smoke') }],
+          [{ label: "Gear Shifting", value: getVal('gearshifting'), media: getMediaForLabel('Gear Shifting') }, { label: "4WD System", value: getVal('fourWdSystemCondition'), media: getMediaForLabel('4WD System') }],
         ],
         comment: i.remarks || "No remarks."
       },
       {
         title: "Steering, Suspension & Brakes",
-        rows: [[{ label: "Brake Pads", value: getVal('brakePads') }, { label: "Brake Discs", value: getArr('brakeDiscs') }], [{ label: "Suspension", value: getVal('suspension') }, { label: "Shock Absorber", value: getArr('shockAbsorberOperation') }], [{ label: "Steering Operation", value: getVal('steeringOperation') }, { label: "Wheel Alignment", value: getVal('wheelAlignment') }],
+        rows: [
+          [{ label: "Brake Pads", value: getVal('brakePads'), media: getMediaForLabel('Brake Pads') }, { label: "Brake Discs", value: getArr('brakeDiscs'), media: getMediaForLabel('Brake Discs') }],
+          [{ label: "Suspension", value: getVal('suspension'), media: getMediaForLabel('Suspension') }, { label: "Shock Absorber", value: getArr('shockAbsorberOperation'), media: getMediaForLabel('Shock Absorber') }],
+          [{ label: "Steering Operation", value: getVal('steeringOperation'), media: getMediaForLabel('Steering Operation') }, { label: "Wheel Alignment", value: getVal('wheelAlignment'), media: getMediaForLabel('Wheel Alignment') }],
         ],
         comment: i.comment_section1 || "No remarks."
       },
       {
         title: "Wheel & Tyre",
-        rows: [[{ label: "Spare Tire", value: getVal('spareTire') }, { label: "Front Left Tire", value: getVal('frontLeftTire') }], [{ label: "Front Right Tire", value: getVal('frontRightTire') }, { label: "Rear Left Tire", value: getVal('rearLeftTire') }], [{ label: "Rear Right Tire", value: getVal('rearRightTire') }, { label: "Tire Size", value: getVal('tiresSize') }], [{ label: "Wheels Type", value: getVal('wheelsType') }, { label: "Front Rim Size", value: getVal('rimsSizeFront') }], [{ label: "Rear Rim Size", value: getVal('rimsSizeRear') }, { label: "", value: "" }],
+        rows: [
+          [{ label: "Spare Tire", value: getVal('spareTire'), media: getMediaForLabel('Spare Tire') }, { label: "Front Left Tire", value: getVal('frontLeftTire'), media: getMediaForLabel('Front Left Tire') }],
+          [{ label: "Front Right Tire", value: getVal('frontRightTire'), media: getMediaForLabel('Front Right Tire') }, { label: "Rear Left Tire", value: getVal('rearLeftTire'), media: getMediaForLabel('Rear Left Tire') }],
+          [{ label: "Rear Right Tire", value: getVal('rearRightTire'), media: getMediaForLabel('Rear Right Tire') }, { label: "Tire Size", value: getVal('tiresSize'), media: getMediaForLabel('Tire Size') }],
+          [{ label: "Wheels Type", value: getVal('wheelsType'), media: getMediaForLabel('Wheels Type') }, { label: "Front Rim Size", value: getVal('rimsSizeFront'), media: getMediaForLabel('Front Rim Size') }],
+          [{ label: "Rear Rim Size", value: getVal('rimsSizeRear'), media: getMediaForLabel('Rear Rim Size') }, { label: "", value: "", media: null }],
         ],
         comment: i.commentTire || "No remarks."
       },
       {
         title: "Interior & Electricals",
-        rows: [[{ label: "Speedometer Cluster", value: getVal('speedmeterCluster') }, { label: "Head Lining", value: getVal('headLining') }], [{ label: "Seat Controls", value: getVal('seatControls') }, { label: "Central Lock", value: getVal('centralLockOperation') }], [{ label: "Windows Control", value: getVal('windowsControl') }, { label: "Cruise Control", value: getVal('cruiseControl') }], [{ label: "Sunroof Condition", value: getVal('sunroofCondition') }, { label: "AC Cooling", value: getVal('acCooling') }], [{ label: "Seats Material", value: getVal('seats') }, { label: "Cooled Seats", value: getVal('cooledSeats') }], [{ label: "Heated Seats", value: getVal('heatedSeats') }, { label: "Power Seats", value: getVal('powerSeats') }],
+        rows: [
+          [{ label: "Speedometer Cluster", value: getVal('speedmeterCluster'), media: getMediaForLabel('Speedometer Cluster') }, { label: "Head Lining", value: getVal('headLining'), media: getMediaForLabel('Head Lining') }],
+          [{ label: "Seat Controls", value: getVal('seatControls'), media: getMediaForLabel('Seat Controls') }, { label: "Central Lock", value: getVal('centralLockOperation'), media: getMediaForLabel('Central Lock') }],
+          [{ label: "Windows Control", value: getVal('windowsControl'), media: getMediaForLabel('Windows Control') }, { label: "Cruise Control", value: getVal('cruiseControl'), media: getMediaForLabel('Cruise Control') }],
+          [{ label: "Sunroof Condition", value: getVal('sunroofCondition'), media: getMediaForLabel('Sunroof Condition') }, { label: "AC Cooling", value: getVal('acCooling'), media: getMediaForLabel('AC Cooling') }],
+          [{ label: "Seats Material", value: getVal('seats'), media: getMediaForLabel('Seats Material') }, { label: "Cooled Seats", value: getVal('cooledSeats'), media: getMediaForLabel('Cooled Seats') }],
+          [{ label: "Heated Seats", value: getVal('heatedSeats'), media: getMediaForLabel('Heated Seats') }, { label: "Power Seats", value: getVal('powerSeats'), media: getMediaForLabel('Power Seats') }],
+          [{ label: "Seats Condition", value: getArr('seatsCondition'), media: getMediaForLabel('Seats Condition') }, { label: "", value: "", media: null }],
         ],
         comment: i.comment_section2 || "No remarks."
       },
       {
         title: "Car Specs",
-        rows: [[{ label: "Parking Sensors", value: getVal('parkingSensors') }, { label: "Keyless Start", value: getVal('keylessStart') }], [{ label: "360 Camera", value: getVal('viveCamera') }, { label: "Blind Spot Monitor", value: getVal('blindSpot') }], [{ label: "Sunroof Type", value: getVal('sunroofType') }, { label: "Heads-Up Display", value: getVal('headsDisplay') }], [{ label: "Premium Sound System", value: getVal('premiumSound') }, { label: "Carbon Fiber Interior", value: getVal('carbonFiber') }], [{ label: "Side Steps", value: getVal('sideSteps') }, { label: "Convertible Top", value: getVal('convertible') }],
+        rows: [
+          [{ label: "Parking Sensors", value: getVal('parkingSensors'), media: getMediaForLabel('Parking Sensors') }, { label: "Keyless Start", value: getVal('keylessStart'), media: getMediaForLabel('Keyless Start') }],
+          [{ label: "360 Camera", value: getVal('viveCamera'), media: getMediaForLabel('360 Camera') }, { label: "Blind Spot Monitor", value: getVal('blindSpot'), media: getMediaForLabel('Blind Spot Monitor') }],
+          [{ label: "Sunroof Type", value: getVal('sunroofType'), media: getMediaForLabel('Sunroof Type') }, { label: "Heads-Up Display", value: getVal('headsDisplay'), media: getMediaForLabel('Heads-Up Display') }],
+          [{ label: "Premium Sound System", value: getVal('premiumSound'), media: getMediaForLabel('Premium Sound System') }, { label: "Carbon Fiber Interior", value: getVal('carbonFiber'), media: getMediaForLabel('Carbon Fiber Interior') }],
+          [{ label: "Side Steps", value: getVal('sideSteps'), media: getMediaForLabel('Side Steps') }, { label: "Convertible Top", value: getVal('convertible'), media: getMediaForLabel('Convertible Top') }],
         ],
         paintCondition: i.paintCondition || []
       }
@@ -713,7 +769,7 @@ export default function LiveCarAuctionScreen() {
       rows: section.rows.map(row => row.map(cell => ({ ...cell, color: getColor(cell.value) })))
     }));
 
-  }, [latestInspection]);
+  }, [latestInspection, getMediaForLabel]);
 
   const groupedDamages = useMemo(() => {
     if (!latestInspection?.damages) return {};
@@ -1037,18 +1093,25 @@ export default function LiveCarAuctionScreen() {
                     return (
                       <View key={cat} style={{ marginBottom: 25 }}>
                         <Text style={[styles.subSectionTitle, { color: '#cadb2a', marginBottom: 12 }]}>{cat}</Text>
-                        <View style={styles.damagesGrid}>
+                        <View style={styles.damagesTableContainer}>
+                          <View style={styles.damagesTableHeader}>
+                            <Text style={[styles.damagesTableCell, styles.damagesTableHeaderText, { flex: 2.5 }]}>Part</Text>
+                            <Text style={[styles.damagesTableCell, styles.damagesTableHeaderText, { flex: 2.5 }]}>Fault Type</Text>
+                            <Text style={[styles.damagesTableCell, styles.damagesTableHeaderText, { flex: 1.5, textAlign: 'center' }]}>Severity</Text>
+                          </View>
                           {displayedItems.map((dmg: any, idx: number) => {
                             const borderColor = getSeverityBorderColor(dmg.severity);
                             const severityColor = getDamageBadgeColor(dmg.type);
                             return (
-                              <View key={idx} style={[styles.damageGridItem, { borderColor: borderColor, borderWidth: 0.1 }]}>
-                                <View style={[styles.damageBadge, { backgroundColor: severityColor }]}>
-                                  <Feather name="alert-circle" size={12} color="#fff" />
-                                  <Text style={styles.damageText} numberOfLines={1}>{dmg.type}</Text>
+                              <View key={idx} style={[styles.damagesTableRow, idx === displayedItems.length - 1 && { borderBottomWidth: 0 }]}>
+                                <Text style={[styles.damagesTableCell, { flex: 2.5, color: '#fff' }]} numberOfLines={2}>{dmg.body_part}</Text>
+                                <View style={[styles.damagesTableCell, { flex: 2.5, flexDirection: 'row', alignItems: 'center' }]}>
+                                  <View style={[styles.damageBadge, { backgroundColor: severityColor, marginBottom: 0 }]}>
+                                    <Feather name="alert-circle" size={10} color="#fff" />
+                                    <Text style={styles.damageText} numberOfLines={1}>{dmg.type}</Text>
+                                  </View>
                                 </View>
-                                <Text style={styles.damageBodyPart} numberOfLines={2}>{dmg.body_part}</Text>
-                                <Text style={[styles.damageSubText, { color: '#aaa' }]}>{dmg.severity}</Text>
+                                <Text style={[styles.damagesTableCell, { flex: 1.5, color: borderColor, fontWeight: 'bold', textAlign: 'center' }]}>{dmg.severity}</Text>
                               </View>
                             );
                           })}
@@ -1083,7 +1146,27 @@ export default function LiveCarAuctionScreen() {
                       {row.map((cell, cIdx) => (
                         <View key={cIdx} style={styles.inspGridItem}>
                           <Text style={styles.inspLabel}>{cell.label}</Text>
-                          <Text style={[styles.inspValue, { color: cell.color }]}>{cell.value}</Text>
+
+                          {/* 🟢 Value and Camera Button Row */}
+                          {cell.label !== "" && (
+                            <View style={styles.inspValueRow}>
+                              <Text style={[styles.inspValue, { color: cell.color, flexShrink: 1 }]}>{cell.value}</Text>
+
+                              {/* Show Camera if media exists for this specific field */}
+                              {cell.media && (
+                                <TouchableOpacity
+                                  onPress={() => {
+                                    const path = cell.media.path.startsWith('http') ? cell.media.path : `${STORAGE_BASE_URL}${cell.media.path}`;
+                                    if (cell.media.file_type === 'video') handleVideoOpen(path);
+                                    else handleImageOpen([path], 0, false);
+                                  }}
+                                  style={styles.fieldCameraBtn}
+                                >
+                                  <Feather name="camera" size={14} color="#000" />
+                                </TouchableOpacity>
+                              )}
+                            </View>
+                          )}
                         </View>
                       ))}
                     </View>
@@ -1115,7 +1198,9 @@ export default function LiveCarAuctionScreen() {
                 </InspectionAccordion>
               ))}
 
-              {/* 🟢 Final Conclusion (Improved Styling) */}
+
+
+              {/* 🟢 Final Conclusion */}
               {latestInspection.final_conclusion ? (
                 <View style={styles.finalConclusionContainer}>
                   <View style={styles.finalConclusionHeader}>
@@ -1129,7 +1214,7 @@ export default function LiveCarAuctionScreen() {
             </View>
           )}
 
-          {/* 🟢 Remarks Section (Renamed & Styled) */}
+          {/* 🟢 Remarks Section */}
           <View onLayout={(e) => handleLayout(e, 'Remarks')} style={styles.sectionContainer}>
             <View style={styles.sectionHeaderRow}>
               <View style={styles.sectionIconBadge}>
@@ -1194,7 +1279,7 @@ export default function LiveCarAuctionScreen() {
           </View>
         </Animated.View>
 
-        {/* Footer, Modals and Alerts code remains consistent */}
+        {/* Footer, Modals and Alerts */}
         {bookingStatus !== 'none' ? (
           <View style={styles.negotiationFooter}>
             <View style={styles.footerBtnRow}>
@@ -1287,6 +1372,7 @@ export default function LiveCarAuctionScreen() {
           initialIndex={previewIndex}
           onClose={() => setPreviewImages([])}
           isWhiteBackground={isPreviewMap}
+          isRotated={isPreviewMap}
         />
 
         <VideoPlayerModal
@@ -1295,7 +1381,6 @@ export default function LiveCarAuctionScreen() {
           onClose={() => setVideoModalVisible(false)}
         />
 
-        {/* 🟢 Toast Component */}
         <Animated.View style={[styles.toastContainer, toastAnimatedStyle]}>
           <Feather name="check-circle" size={18} color="#cadb2a" style={{ marginRight: 8 }} />
           <Text style={styles.toastText}>{toastMessage}</Text>
@@ -1375,6 +1460,11 @@ const styles = StyleSheet.create({
   inspGridRow: { flexDirection: 'row', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: '#222', paddingVertical: 8 },
   inspGridItem: { width: '50%', paddingRight: 5 },
   inspLabel: { color: '#888', fontSize: 12, fontFamily: 'Poppins', marginBottom: 2 },
+
+  // 🟢 NEW: Styles for the inline camera row
+  inspValueRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
+  fieldCameraBtn: { backgroundColor: '#cadb2a', padding: 4, borderRadius: 4, marginLeft: 8 },
+
   inspValue: { fontSize: 14, fontWeight: 'bold', fontFamily: 'Poppins' },
   inspCommentBox: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#222' },
   inspCommentLabel: { color: '#888', fontSize: 12, marginBottom: 4 },
@@ -1395,12 +1485,13 @@ const styles = StyleSheet.create({
   tag: { borderRadius: 4, paddingHorizontal: 8, paddingVertical: 4, marginRight: 5, marginBottom: 5 },
   tagText: { fontSize: 12, fontFamily: 'Poppins' },
   mediaBtnRight: { marginLeft: 12, padding: 4 },
-  damagesGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
-  damageGridItem: { width: '48%', backgroundColor: '#181818', borderRadius: 8, padding: 10, marginBottom: 10, alignItems: 'center', borderWidth: 1, borderColor: '#333' },
-  damageBadge: { borderRadius: 4, paddingVertical: 3, paddingHorizontal: 6, flexDirection: 'row', alignItems: 'center', marginBottom: 6, width: '100%', justifyContent: 'center' },
-  damageText: { color: '#fff', fontSize: 10, fontWeight: 'bold', marginLeft: 4, textAlign: 'center' },
-  damageBodyPart: { color: '#fff', fontSize: 12, fontWeight: '600', textAlign: 'center', marginBottom: 2 },
-  damageSubText: { color: '#ccc', fontSize: 10, textAlign: 'center', marginTop: 2 },
+  damagesTableContainer: { backgroundColor: 'transparent', overflow: 'hidden' },
+  damagesTableHeader: { flexDirection: 'row', paddingVertical: 10, paddingHorizontal: 0, borderBottomWidth: 1, borderBottomColor: '#333' },
+  damagesTableHeaderText: { color: '#aaa', fontSize: 11, fontWeight: 'bold' },
+  damagesTableRow: { flexDirection: 'row', paddingVertical: 12, paddingHorizontal: 0, borderBottomWidth: 1, borderBottomColor: '#222', alignItems: 'center' },
+  damagesTableCell: { fontSize: 12, fontFamily: 'Poppins', paddingHorizontal: 4 },
+  damageBadge: { borderRadius: 4, paddingVertical: 3, paddingHorizontal: 6, flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start' },
+  damageText: { color: '#fff', fontSize: 10, fontWeight: 'bold', marginLeft: 4 },
   descriptionText: { color: '#ccc', fontSize: 14, fontFamily: 'Poppins', lineHeight: 20 },
   commentBox: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: '#111', padding: 16, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: '#222' },
   bidNowContainer: { paddingHorizontal: 16, paddingBottom: 12, paddingTop: 12, backgroundColor: '#000', borderTopWidth: 1, borderTopColor: '#222' },
@@ -1515,7 +1606,6 @@ const styles = StyleSheet.create({
   statusSubText: { color: '#aaa', fontSize: 13, fontFamily: 'Poppins', textAlign: 'center', lineHeight: 20 },
   commentContainer: { marginTop: 10 },
 
-  // 🟢 New Styling for Final Conclusion & Remarks
   finalConclusionContainer: {
     backgroundColor: '#111',
     borderLeftWidth: 4,
@@ -1585,10 +1675,9 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins',
   },
 
-  // 🟢 Toast Styles
   toastContainer: {
     position: 'absolute',
-    bottom: 120, // Adjusted to be visible above bottom sheet if open
+    bottom: 120,
     alignSelf: 'center',
     backgroundColor: 'rgba(20, 20, 20, 0.95)',
     paddingHorizontal: 24,
@@ -1610,5 +1699,33 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins',
     fontSize: 14,
     fontWeight: '600',
-  }
+  },
+
+  fieldImageWrapper: {
+    width: 110,
+    height: 110,
+    borderRadius: 8,
+    backgroundColor: '#222',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  fieldImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  videoPlayOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fieldImageLabel: {
+    color: '#aaa',
+    fontSize: 11,
+    marginTop: 6,
+    fontFamily: 'Poppins',
+    textAlign: 'center',
+  },
 });
