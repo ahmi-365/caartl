@@ -90,7 +90,7 @@ android {
 
     namespace 'com.caartl.app'
     defaultConfig {
-        applicationId 'com.caartl.app'
+        applicationId 'com.caartl.mobile'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
