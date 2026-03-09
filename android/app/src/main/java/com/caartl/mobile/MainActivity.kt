@@ -1,4 +1,4 @@
-package com.caartl.app
+package com.caartl.mobile
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

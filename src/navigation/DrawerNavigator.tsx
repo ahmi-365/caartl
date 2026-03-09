@@ -38,13 +38,13 @@ const CustomDrawerContent = (props: DrawerContentComponentProps) => {
             setShowLoginAlert(true);
             return;
         }
-        
+
         // 🟢 Unapproved user trying to access restricted feature (not allowed for unapproved)
         if (isUnapproved && !isPublic && !allowUnapproved) {
             setShowApprovalAlert(true);
             return;
         }
-        
+
         // @ts-ignore
         props.navigation.navigate(screen);
     };
@@ -85,22 +85,22 @@ const CustomDrawerContent = (props: DrawerContentComponentProps) => {
                             return true;
                         })
                         .map((item, index) => (
-                        <TouchableOpacity
-                            key={index}
-                            style={styles.drawerItem}
-                            onPress={() => handleItemPress(item.screen, item.public, item.allowUnapproved)}
-                        >
-                            <View style={styles.iconBox}>
-                                {item.type === 'MaterialCommunityIcons' ? (
-                                    <MaterialCommunityIcons name={item.icon as any} size={18} color="#000" />
-                                ) : (
-                                    <Feather name={item.icon as any} size={18} color="#000" />
-                                )}
-                            </View>
-                            <Text style={styles.drawerLabel}>{item.label}</Text>
-                            <Feather name="chevron-right" size={18} color="#444" />
-                        </TouchableOpacity>
-                    ))}
+                            <TouchableOpacity
+                                key={index}
+                                style={styles.drawerItem}
+                                onPress={() => handleItemPress(item.screen, item.public, item.allowUnapproved)}
+                            >
+                                <View style={styles.iconBox}>
+                                    {item.type === 'MaterialCommunityIcons' ? (
+                                        <MaterialCommunityIcons name={item.icon as any} size={18} color="#000" />
+                                    ) : (
+                                        <Feather name={item.icon as any} size={18} color="#000" />
+                                    )}
+                                </View>
+                                <Text style={styles.drawerLabel}>{item.label}</Text>
+                                <Feather name="chevron-right" size={18} color="#444" />
+                            </TouchableOpacity>
+                        ))}
 
                     {/* Inquiry Button */}
                     <TouchableOpacity
@@ -126,7 +126,7 @@ const CustomDrawerContent = (props: DrawerContentComponentProps) => {
                             color={isGuest ? "#cadb2a" : "#FF4444"}
                         />
                     </TouchableOpacity>
-                    <Text style={styles.versionText}>App Version 1.0.0</Text>
+                    <Text style={styles.versionText}>App Version 1.0.2</Text>
                 </View>
 
             </SafeAreaView>

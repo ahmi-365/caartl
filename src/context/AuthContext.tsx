@@ -58,12 +58,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                     if (result.success && result.data.data) {
                         userData = normalizeUser(result.data.data);
                         await AsyncStorage.setItem('userData', JSON.stringify(userData));
-                    } else {
-                        // If result.success is false (e.g. 401 or HTML error), log out.
-                        console.log("Token invalid, expired, or server error. Logging out.");
+                    } else if (result.status === 401) {
+                        // ✅ ONLY log out if the server explicitly says the token is expired/invalid
+                        console.log("Token expired or invalid. Logging out.");
                         token = null;
                         userData = null;
                         await AsyncStorage.multiRemove(['userToken', 'userData']);
+                    } else {
+                        // ✅ Network error or server maintenance (Status 0, 500, etc.)
+                        // Do NOT log the user out. Just use the local AsyncStorage data.
+                        console.log("Network error or server down. Keeping local session active.");
                     }
                 }
             } catch (e) {
@@ -120,7 +124,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
         return false;
     };
-    
+
     const resendOtp = async (phone: string) => {
         const result = await apiService.resendOtp(phone);
         if (result.success) {

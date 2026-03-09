@@ -1,4 +1,4 @@
-package com.caartl.app
+package com.caartl.mobile
 
 import android.app.Application
 import android.content.res.Configuration

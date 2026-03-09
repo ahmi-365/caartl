@@ -22,7 +22,7 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.caartl.app",
+      "package": "com.caartl.mobile",
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSyAfVpjHZOorgnONhgSzFNvNBzF2oALsmIU"
